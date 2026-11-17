@@ -191,7 +191,7 @@ async function handleAdmin(req, res, p, url) {
     return send(res, 200, {
       apartments: d.apartments.map(a => ({ ...a, icalUrl: undefined, hasUrl: !!a.icalUrl, urlHost: a.icalUrl ? safeHost(a.icalUrl) : '' })),
       settings: d.settings, colors: COLORS,
-      feedUrl: feedPath() ? `${PUBLIC_URL || `http://${(req.headers.host || 'localhost').replace(/:\d+$/, '')}:${VIEW_PORT}`}${feedPath()}` : '',
+      feedUrl: feedPath() ? `${PUBLIC_URL || `http://${(req.headers.host || 'localhost').replace(/:\d+$/, '')}:${process.env.IPAD_PORT || VIEW_PORT}`}${feedPath()}` : '',
       status: d.apartments.map(a => ({ id: a.id, ...(d.cache[a.id] ? { fetchedAt: d.cache[a.id].fetchedAt, error: d.cache[a.id].error, count: d.cache[a.id].events?.length || 0 } : {}) })),
       firm: [...d.firm].sort((a, b) => a.from.localeCompare(b.from)),
       seasons: d.seasons,

@@ -7,6 +7,9 @@ services:
     env_file:
       - path: .env
         required: false
+    environment:
+      # damit der iCal-Link von Fewo 1 den richtigen Port nennt
+      IPAD_PORT: ${IPAD_PORT:-8090}
     ports:
       # iPad-Ansicht (groß, nur lesen) – darf über den Tunnel ins Internet
       - "${IPAD_PORT:-8090}:8080"
