@@ -265,7 +265,7 @@
   const firmSel = new Set();
   let pasteOpen = false;
   let preview = null; // { rows, skipped, source }
-  let smoobuApts = null, smoobuErr = '';
+  let smoobuApts = null, smoobuErr = '', seaYearSel = null;
 
   async function loadCfg() { cfg = await api('/api/admin/config'); }
 
@@ -311,13 +311,26 @@
 
     const feedUrl = cfg.feedUrl;
 
-    const md = s => { const [m, d] = s.split('-'); return `${d}.${m}.`; };
-    const seasonRows = cfg.seasons.map(s => `<tr>
+    const WD = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
+    const isDay = s => /^\d{4}-\d{2}-\d{2}$/.test(s);
+    const wd = s => (isDay(s) ? WD[D(s).getDay()] : '');
+    const thisYear = new Date().getFullYear();
+    const seaYears = new Set(cfg.seasons.map(s => +String(s.from).slice(0, 4)));
+    if (!seaYearSel) seaYearSel = seaYears.has(thisYear + 1) ? thisYear + 2 : thisYear + 1;
+    let lastYear = null;
+    const seasonRows = cfg.seasons.map(s => {
+      const yr = String(s.from).slice(0, 4);
+      const head = yr !== lastYear ? `<tr class="grp"><td colspan="5"><b>${esc(yr)}</b></td></tr>` : '';
+      lastYear = yr;
+      const days = isDay(s.from) && isDay(s.to) ? Math.round((D(s.to) - D(s.from)) / 864e5) + 1 : '';
+      return `${head}<tr>
       <td><select class="in" data-sea="${s.id}|kind"><option value="haupt" ${s.kind === 'haupt' ? 'selected' : ''}>Hauptsaison</option><option value="neben" ${s.kind === 'neben' ? 'selected' : ''}>Nebensaison</option></select></td>
-      <td><input class="in short" data-sea="${s.id}|from" value="${md(s.from)}" placeholder="TT.MM."></td>
-      <td><input class="in short" data-sea="${s.id}|to" value="${md(s.to)}" placeholder="TT.MM."></td>
+      <td><input class="in" type="date" style="width:auto" data-sea="${s.id}|from" value="${esc(s.from)}"> <span class="small">${wd(s.from)}</span></td>
+      <td><input class="in" type="date" style="width:auto" data-sea="${s.id}|to" value="${esc(s.to)}"> <span class="small">${wd(s.to)} · ${days} Tage</span></td>
       <td><input class="in" data-sea="${s.id}|label" value="${esc(s.label)}"></td>
-      <td><button class="mini" type="button" data-seadel="${s.id}" aria-label="Saison löschen">✕</button></td></tr>`).join('');
+      <td><button class="mini" type="button" data-seadel="${s.id}" aria-label="Saison löschen">✕</button></td></tr>`;
+    }).join('');
+    const yearOpts = [thisYear - 1, thisYear, thisYear + 1, thisYear + 2, thisYear + 3].map(y => `<option value="${y}" ${y === seaYearSel ? 'selected' : ''}>${y}</option>`).join('');
 
     const hs = cfg.holidayStatus;
     const manualRows = cfg.manualHolidays.map(h => `<tr><td>${fy(D(h.start))}</td><td>${fy(add(D(h.end), -1))}</td><td>${esc(h.name)}</td><td><button class="mini" type="button" data-holdel="${h.id}" aria-label="löschen">✕</button></td></tr>`).join('');
@@ -335,9 +348,11 @@
             <button class="mini" type="button" id="copyFeed">Kopieren</button><button class="mini" type="button" id="newFeed">Neuen Link erzeugen</button></div>
             <p class="small">Den Link nur weitergeben, wenn der Kalender anderswo abonniert werden soll (z. B. in Smoobu). „Neuen Link erzeugen“ macht den alten ungültig.</p>` : ''}`)}
         ${sec('firm', `Belegungsplan ${esc(ownName())}`, 'Die Firma schickt ihren Plan als PDF. Hier wird er als Tabelle gepflegt. Änderungen erscheinen sofort im Kalender.', firmTable())}
-        ${sec('saison', 'Haupt- und Nebensaison', 'Gilt jedes Jahr wieder. Über den Jahreswechsel ist möglich (z. B. 20.12. bis 06.01.). Zeiten ohne Eintrag gelten als „keine Saison“.', `
-          <div class="tbl"><table><thead><tr><th>Art</th><th>Von (TT.MM.)</th><th>Bis (TT.MM.)</th><th>Bezeichnung</th><th></th></tr></thead><tbody>${seasonRows}</tbody></table></div>
-          <div class="row"><button class="mini" type="button" id="seaAdd">+ Saison</button></div>`)}
+        ${sec('saison', 'Haupt- und Nebensaison', 'Jedes Jahr mit eigenen Daten, weil die Wochentage jedes Jahr anders fallen. „Aus dem Vorjahr übernehmen“ kopiert die Saisons um 52 Wochen verschoben, also auf dieselben Wochentage. Danach bei Bedarf einzeln anpassen. Zeiten ohne Eintrag gelten als „keine Saison“.', `
+          <div class="tbl"><table><thead><tr><th>Art</th><th>Von</th><th>Bis</th><th>Bezeichnung</th><th></th></tr></thead><tbody>${seasonRows || '<tr><td colspan="5" class="small">Noch keine Saisons eingetragen.</td></tr>'}</tbody></table></div>
+          <div class="row">Jahr <select class="in" id="seaYear" style="width:auto">${yearOpts}</select>
+            <button class="mini" type="button" id="seaAdd">+ Saison</button>
+            <button class="mini" type="button" id="seaCopy">Aus dem Vorjahr übernehmen</button></div>`)}
         ${sec('ferien', 'Schulferien und Feiertage Baden-Württemberg', 'Werden automatisch einmal täglich von openholidaysapi.org geladen. Fehlt etwas, kannst du Zeiträume von Hand ergänzen.', `
           <div class="row">${hs.error && !hs.count ? `<span class="badge err">Fehler</span> <span class="small">${esc(hs.error)}</span>` : hs.count ? `<span class="badge ok">ok</span> <span class="small">${hs.count} Einträge, Stand ${when(hs.fetchedAt)}${hs.error ? ` (letzter Abruf fehlgeschlagen: ${esc(hs.error)})` : ''}</span>` : '<span class="badge off">noch nicht geladen</span>'}</div>
           <div class="tbl"><table><thead><tr><th>Von</th><th>Bis</th><th>Bezeichnung</th><th></th></tr></thead><tbody>${manualRows || '<tr><td colspan="4" class="small">Keine eigenen Einträge.</td></tr>'}</tbody></table></div>
@@ -480,15 +495,16 @@
     }
 
     // Saisons
-    const toMd = v => { const m = String(v).trim().match(/^(\d{1,2})\.(\d{1,2})\.?$/); return m ? `${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}` : null; };
     $$('[data-sea]').forEach(i => i.onchange = () => {
       const [id, k] = i.dataset.sea.split('|');
-      let val = i.value;
-      if (k === 'from' || k === 'to') { val = toMd(val); if (!val) return toast('Bitte als TT.MM. eingeben, z. B. 01.07.'); }
+      const val = i.value;
+      if ((k === 'from' || k === 'to') && !/^\d{4}-\d{2}-\d{2}$/.test(val)) return toast('Bitte ein vollständiges Datum eingeben.');
       act(() => put(`/api/admin/seasons/${id}`, { [k]: val }), 'Gespeichert.');
     });
+    $('#seaYear').onchange = e => { seaYearSel = +e.target.value; };
+    $('#seaCopy').onclick = () => act(() => post('/api/admin/seasons/copy', { fromYear: seaYearSel - 1, toYear: seaYearSel }), `Saisons aus ${seaYearSel - 1} für ${seaYearSel} übernommen. Bitte prüfen.`);
     $$('[data-seadel]').forEach(b => b.onclick = () => act(() => api(`/api/admin/seasons/${b.dataset.seadel}`, { method: 'DELETE' }), 'Saison gelöscht.'));
-    $('#seaAdd').onclick = () => act(() => post('/api/admin/seasons', { kind: 'neben', from: '11-01', to: '11-30' }), 'Saison angelegt, bitte Daten anpassen.');
+    $('#seaAdd').onclick = () => act(() => post('/api/admin/seasons', { kind: 'neben', from: `${seaYearSel}-04-01`, to: `${seaYearSel}-04-30` }), `Saison für ${seaYearSel} angelegt, bitte Daten anpassen.`);
 
     // Ferien
     $$('[data-holdel]').forEach(b => b.onclick = () => act(() => api(`/api/admin/holidays/${b.dataset.holdel}`, { method: 'DELETE' }), 'Gelöscht.'));

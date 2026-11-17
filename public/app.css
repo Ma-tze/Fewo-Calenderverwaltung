@@ -144,3 +144,4 @@ nav.dock button[aria-current="true"] { border-color: var(--accent); box-shadow: 
 
 @media (max-width: 860px) { .settings { grid-template-columns: 1fr; } .snav { position: static; flex-direction: row; flex-wrap: wrap; } }
 @media (max-width: 600px) { nav.dock { grid-template-columns: repeat(2, 1fr); } }
+.tbl tr.grp td { background: var(--bg2, rgba(127,127,127,.08)); padding-top: 10px; }

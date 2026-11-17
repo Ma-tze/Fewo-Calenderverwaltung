@@ -13,7 +13,7 @@ import { Store } from './store.js';
 import { parseICS, buildICS, parsePastedPlan, parsePlanText, isValidDay, addDays } from './ical.js';
 import { execFile } from 'node:child_process';
 import os from 'node:os';
-import { fetchHolidays, expandSeasons } from './holidays.js';
+import { fetchHolidays, expandSeasons, copySeasons } from './holidays.js';
 import { smoobuConfigured, smoobuAuthMode, listApartments as smoobuApartments, fetchReservations } from './smoobu.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -320,14 +320,24 @@ async function handleAdmin(req, res, p, url) {
   if (p === '/api/admin/seasons' && m === 'POST') {
     const s = cleanSeason(await readJson(req));
     const entry = { id: store.nextId('seasons'), ...s };
-    d.seasons.push(entry); store.save();
+    d.seasons.push(entry); sortSeasons(); store.save();
     return send(res, 200, entry);
+  }
+  if (p === '/api/admin/seasons/copy' && m === 'POST') {
+    const { fromYear, toYear } = await readJson(req);
+    if (!Number.isInteger(fromYear) || !Number.isInteger(toYear) || fromYear === toYear) throw new Error('Jahre ungültig');
+    if (d.seasons.some(s => String(s.from).startsWith(`${toYear}-`))) throw new Error(`Für ${toYear} gibt es schon Saisons. Bitte erst löschen oder einzeln anpassen.`);
+    const copies = copySeasons(d.seasons, fromYear, toYear);
+    if (!copies.length) throw new Error(`Für ${fromYear} sind keine Saisons eingetragen.`);
+    for (const c of copies) d.seasons.push({ id: store.nextId('seasons'), ...c });
+    sortSeasons(); store.save();
+    return send(res, 200, { ok: true, added: copies.length });
   }
   const sm = p.match(/^\/api\/admin\/seasons\/(\d+)$/);
   if (sm && m === 'PUT') {
     const entry = d.seasons.find(e => e.id === +sm[1]);
     if (!entry) throw new Error('Saison unbekannt');
-    Object.assign(entry, cleanSeason({ ...entry, ...(await readJson(req)) })); store.save();
+    Object.assign(entry, cleanSeason({ ...entry, ...(await readJson(req)) })); sortSeasons(); store.save();
     return send(res, 200, entry);
   }
   if (sm && m === 'DELETE') { d.seasons = d.seasons.filter(e => e.id !== +sm[1]); store.save(); return send(res, 200, { ok: true }); }
@@ -421,10 +431,13 @@ async function handleAdmin(req, res, p, url) {
   return send(res, 404, { error: 'Unbekannt' });
 }
 
+function sortSeasons() { store.data.seasons.sort((a, b) => (a.from < b.from ? -1 : a.from > b.from ? 1 : 0)); }
+
 function cleanSeason(s) {
-  const md = v => /^\d{2}-\d{2}$/.test(v) && isValidDay(`2024-${v}`);
   if (!['haupt', 'neben'].includes(s.kind)) throw new Error('Art muss Haupt- oder Nebensaison sein.');
-  if (!md(s.from) || !md(s.to)) throw new Error('Bitte Tag und Monat angeben.');
+  if (!isValidDay(s.from) || !isValidDay(s.to)) throw new Error('Bitte Datum mit Jahr angeben.');
+  if (s.to < s.from) throw new Error('„Bis“ liegt vor „Von“.');
+  if (addDays(s.from, 400) < s.to) throw new Error('Eine Saison kann höchstens ein gutes Jahr lang sein.');
   return { kind: s.kind, from: s.from, to: s.to, label: String(s.label || '').slice(0, 40) || (s.kind === 'haupt' ? 'Hauptsaison' : 'Nebensaison') };
 }
 

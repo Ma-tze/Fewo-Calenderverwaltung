@@ -50,18 +50,41 @@ export async function fetchHolidays(store) {
   }
 }
 
-// Saisons sind jährlich wiederkehrend ("MM-DD" bis "MM-DD", inklusive). Über den Jahreswechsel ist erlaubt.
+// Saisons haben feste Daten mit Jahr ("JJJJ-MM-TT" bis "JJJJ-MM-TT", inklusive).
+// Alte Einträge ohne Jahr ("MM-DD") werden für die angegebenen Jahre wiederholt.
 export function expandSeasons(seasons, years) {
   const out = [];
   for (const s of seasons || []) {
+    const name = s.label || (s.kind === 'haupt' ? 'Hauptsaison' : 'Nebensaison');
+    if (isValidDay(s.from) && isValidDay(s.to) && s.to >= s.from) { out.push({ start: s.from, end: addDays(s.to, 1), kind: s.kind, name }); continue; }
     if (!/^\d{2}-\d{2}$/.test(s.from) || !/^\d{2}-\d{2}$/.test(s.to)) continue;
     for (const y of years) {
       const start = `${y}-${s.from}`;
       const endYear = s.to < s.from ? y + 1 : y;
       const endIncl = `${endYear}-${s.to}`;
       if (!isValidDay(start) || !isValidDay(endIncl)) continue;
-      out.push({ start, end: addDays(endIncl, 1), kind: s.kind, name: s.label || (s.kind === 'haupt' ? 'Hauptsaison' : 'Nebensaison') });
+      out.push({ start, end: addDays(endIncl, 1), kind: s.kind, name });
     }
   }
   return out;
+}
+
+// Alte jährliche Saisons (ohne Jahr) in feste Einträge für die angegebenen Jahre umwandeln
+export function migrateSeasons(seasons, years) {
+  if (!(seasons || []).some(s => /^\d{2}-\d{2}$/.test(s.from))) return null;
+  const out = [];
+  let id = 1;
+  for (const s of seasons) {
+    if (/^\d{2}-\d{2}$/.test(s.from)) {
+      for (const e of expandSeasons([s], years)) out.push({ id: id++, kind: s.kind, from: e.start, to: addDays(e.end, -1), label: s.label || '' });
+    } else out.push({ ...s, id: id++ });
+  }
+  return out.sort((a, b) => (a.from < b.from ? -1 : 1));
+}
+
+// Saisons eines Jahres ins Zieljahr kopieren, um volle Wochen verschoben (gleiche Wochentage)
+export function copySeasons(seasons, fromYear, toYear) {
+  const weeks = Math.round((toYear - fromYear) * 365.2425 / 7);
+  return (seasons || []).filter(s => isValidDay(s.from) && s.from.startsWith(`${fromYear}-`))
+    .map(s => ({ kind: s.kind, label: s.label, from: addDays(s.from, weeks * 7), to: addDays(s.to, weeks * 7) }));
 }

@@ -4,6 +4,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import { migrateSeasons } from './holidays.js';
 
 const DEFAULTS = () => ({
   version: 1,
@@ -16,8 +17,9 @@ const DEFAULTS = () => ({
   settings: { intervalMinutes: 5 },
   firm: [],
   seasons: [
-    { id: 1, kind: 'haupt', from: '07-01', to: '08-31', label: 'Hauptsaison' },
-    { id: 2, kind: 'neben', from: '04-01', to: '06-30', label: 'Nebensaison' },
+    // Startwerte ohne Jahr, werden beim Laden in feste Daten für dieses und nächstes Jahr umgewandelt
+    { id: 1, kind: 'neben', from: '04-01', to: '06-30', label: 'Nebensaison' },
+    { id: 2, kind: 'haupt', from: '07-01', to: '08-31', label: 'Hauptsaison' },
     { id: 3, kind: 'neben', from: '09-01', to: '10-31', label: 'Nebensaison' },
   ],
   manualHolidays: [], // { id, start, end (exklusiv), name }
@@ -26,22 +28,30 @@ const DEFAULTS = () => ({
   cache: {}, // aptId -> { fetchedAt, error, events: [{uid,start,end,summary,description}] }
 });
 
+function migrate(d) {
+  const y = new Date().getFullYear();
+  const m = migrateSeasons(d.seasons, [y, y + 1]);
+  if (m) d.seasons = m;
+  return d;
+}
+
 export class Store {
   constructor(dir) {
     this.dir = dir;
     this.file = path.join(dir, 'fewo-kalender.json');
     fs.mkdirSync(dir, { recursive: true });
     this.data = this.#load();
+    this.save(); // evtl. umgewandelte Daten (z. B. Saisons mit Jahr) sofort festschreiben
   }
 
   #load() {
     try {
       const raw = JSON.parse(fs.readFileSync(this.file, 'utf8'));
       const def = DEFAULTS();
-      return { ...def, ...raw, settings: { ...def.settings, ...(raw.settings || {}) } };
+      return migrate({ ...def, ...raw, settings: { ...def.settings, ...(raw.settings || {}) } });
     } catch (e) {
       if (e.code !== 'ENOENT') console.error('Konnte Daten nicht lesen, starte mit Standardwerten:', e.message);
-      const d = DEFAULTS();
+      const d = migrate(DEFAULTS());
       this.data = d;
       this.save();
       return d;
