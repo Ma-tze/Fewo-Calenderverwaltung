@@ -184,7 +184,7 @@ Danach: grüner Haken „Eingetragen“, und falls nötig der Hinweis „Bitte n
 
 ### 5.7 Rollen
 
-- **Schwiegermutter:** sieht und bearbeitet alles oben Beschriebene, sonst nichts.
+- **Schwiegermutter:** sieht und bearbeitet alles oben Beschriebene, auch Stornieren und Verschieben (bestätigt). Verschieben läuft als Schritt-für-Schritt-Ablauf wie „Neue Buchung“, mit vorausgefüllten Daten. Bei jeder Stornierung oder Verschiebung bekommt matze eine kurze ntfy-Info, damit er im Bild ist. Alles andere sieht sie nicht.
 - **matze (Verwaltung):** zusätzlich Einstellungen (Wohnungsnamen/Farben, Kanäle, wer welche Benachrichtigung bekommt, Smoobu-Verbindung, iCal-Links), Protokoll aller Änderungen.
 
 ## 6. PDF-Export pro Monat
@@ -218,7 +218,7 @@ Datenschutz: Gastdaten liegen in Smoobu; die App speichert nur einen Zwischenspe
 4. **TouristInfo Immenstaad:** teilweise beantwortet: Heute gibt es kein iCal. Ein neues System kommt voraussichtlich Anfang Dezember 2026, danach prüfen wir es erneut. Noch offen: Wer trägt dort heute nach, und wie kommen von dort Buchungen herein?
 5. ~~**Fewo 4**~~ – beantwortet: Die Firma nutzt die Wohnung durchgängig. Sie bleibt außerhalb von Smoobu.
 6. ~~**Wer bekommt Nachtrag-Erinnerungen?**~~ – beantwortet: beide, matze und die Schwiegermutter, per Push über ntfy.
-7. **Darf die Schwiegermutter selbst stornieren und verschieben**, oder nur anlegen (und Änderungen gehen an matze)?
+7. ~~**Darf die Schwiegermutter selbst stornieren und verschieben?**~~ – beantwortet: ja, sofern es einfach bedienbar ist. matze bekommt bei jeder Stornierung/Verschiebung eine ntfy-Info.
 8. **Welche Infos stehen heute im Papierkalender** pro Buchung (Name, Telefon, Personen, Preis, Anzahlung, Endreinigung …)? Preise erstmal weglassen?
 9. **Namen und Farben der Wohnungen**, wie sie in der Familie heißen.
 10. **iPad:** Modell / iPadOS-Version, Querformat mit Hülle? Gibt es einen Drucker mit AirPrint?
