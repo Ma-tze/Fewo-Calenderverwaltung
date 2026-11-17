@@ -123,8 +123,9 @@ Dasselbe Nachtrag-Prinzip lässt sich für jeden weiteren Kanal ohne Schnittstel
 
 ### 4.4 Fewo 4 (Firma)
 
-- Nur in der App-Datenbank. Eintrag als „Dauermiete Firma XY“ von–bis, plus einzelne freie Zeiträume, falls die Wohnung zwischendurch frei ist.
-- Wird die Wohnung doch einmal frei vermietet, kann sie später in Smoobu aufgenommen werden; die App übernimmt sie dann wie Fewo 1–3.
+- Wird laut matze **durchgängig** von der Firma genutzt (bestätigt 17.11.2026). Sie bleibt deshalb außerhalb von Smoobu.
+- In der App ist sie eine eigene Zeile mit einem durchgehenden Balken „Dauermiete Firma XY“, eingetragen in der App-eigenen Datenbank. Im Alltag gibt es dort nichts zu pflegen.
+- Wird die Wohnung irgendwann doch frei vermietet, kann sie in Smoobu aufgenommen werden, und die App behandelt sie dann wie Fewo 1–3.
 
 ## 5. Bedienkonzept für das iPad
 
@@ -215,7 +216,7 @@ Datenschutz: Gastdaten liegen in Smoobu; die App speichert nur einen Zwischenspe
 2. ~~**Kanäle in Smoobu**~~ – beantwortet: Booking.com und Airbnb sind angebunden. Die Bodensee-Portale sind nicht mit Smoobu verbunden.
 3. **Portale:** teilweise beantwortet: Buchungen kommen nur als Anfrage per E-Mail, eine Direktbuchung gibt es nicht. Noch offen: Werden dort immer alle 3 Wohnungen angeboten?
 4. **TouristInfo Immenstaad:** teilweise beantwortet: Heute gibt es kein iCal. Ein neues System kommt voraussichtlich Anfang Dezember 2026, danach prüfen wir es erneut. Noch offen: Wer trägt dort heute nach, und wie kommen von dort Buchungen herein?
-5. **Fewo 4:** Gibt es Zeiträume, in denen die Firma die Wohnung nicht nutzt und sie frei vermietet wird? Soll sie langfristig in Smoobu?
+5. ~~**Fewo 4**~~ – beantwortet: Die Firma nutzt die Wohnung durchgängig. Sie bleibt außerhalb von Smoobu.
 6. **Wer bekommt Nachtrag-Erinnerungen?** Nur matze, oder auch die Schwiegermutter? Per E-Mail, SMS, Push?
 7. **Darf die Schwiegermutter selbst stornieren und verschieben**, oder nur anlegen (und Änderungen gehen an matze)?
 8. **Welche Infos stehen heute im Papierkalender** pro Buchung (Name, Telefon, Personen, Preis, Anzahlung, Endreinigung …)? Preise erstmal weglassen?
