@@ -1,0 +1,19 @@
+services:
+  fewo-kalender:
+    build: .
+    image: fewo-kalender:latest
+    container_name: fewo-kalender
+    restart: unless-stopped
+    env_file:
+      - path: .env
+        required: false
+    ports:
+      # iPad-Ansicht (groß, nur lesen) – darf über den Tunnel ins Internet
+      - "8080:8080"
+      # PC-Verwaltung (Einstellungen, Fewo-1-Plan) – nur im Heimnetz verwenden!
+      - "8081:8081"
+    volumes:
+      - fewo-data:/data
+
+volumes:
+  fewo-data:

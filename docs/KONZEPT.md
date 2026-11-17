@@ -136,6 +136,12 @@ Dasselbe Nachtrag-Prinzip lässt sich für jeden weiteren Kanal ohne Schnittstel
 - **Einheitliche Datenquelle:** Die App stellt den Fewo-1-Kalender als **eigenen iCal-Feed** bereit (geheimer Link). In den Einstellungen unter „Datenquellen“ steht Fewo 1 damit genauso da wie Fewo 2–4, nur mit Quelle „Eigener Kalender der App“ statt Smoobu. Der Kalender liest alle vier Wohnungen auf demselben Weg ein. Den Link kann man bei Bedarf auch anderswo abonnieren (z.B. in Smoobu oder im Handy-Kalender).
 - Die Schwiegermutter sieht Fewo 1 nur an; Änderungen laufen über matze.
 
+### 4.5 Schulferien, Feiertage und Saisons
+
+- **Schulferien und Feiertage Baden-Württemberg** werden einmal täglich automatisch von openholidaysapi.org geladen (kostenlos, ohne Schlüssel). Fehlt etwas, lassen sich Zeiträume am PC von Hand ergänzen.
+- **Haupt- und Nebensaison** werden am PC als jährlich wiederkehrende Zeiträume festgelegt (z. B. Hauptsaison 01.07.–31.08.); über den Jahreswechsel ist möglich.
+- Im Kalender erscheinen beide als schmale Bänder über den Wohnungen; Feiertage zusätzlich rot im Tageskopf. In der Jahresansicht als dünne Zeilen je Monat.
+
 ## 5. Bedienkonzept für das iPad
 
 ### 5.1 Gestaltungsregeln
@@ -209,9 +215,9 @@ Danach: grüner Haken „Eingetragen“, und falls nötig der Hinweis „Bitte n
 
 | Baustein | Vorschlag | Warum |
 |---|---|---|
-| Oberfläche | PWA mit **SvelteKit** (oder Next.js), TypeScript | eine Codebasis für iPad, Handy, PC; als App-Symbol installierbar |
-| Server | im selben SvelteKit-Projekt (Node) | ein Projekt, ein Deployment |
-| Datenbank | **SQLite** | reicht für 4 Wohnungen dauerhaft, eine Datei, leicht zu sichern |
+| Oberfläche | PWA ohne Framework (HTML/CSS/JS); **zwei Ports**: 8080 iPad-Ansicht (groß), 8081 PC-Verwaltung (kompakt, Einstellungen) | keine Build-Schritte, als App-Symbol installierbar |
+| Server | Node.js ohne zusätzliche Pakete | einfach zu installieren und zu warten |
+| Datenbank | Phase 1: eine **JSON-Datei** mit täglicher Sicherung; später bei Bedarf SQLite | reicht für 4 Wohnungen, keine Abhängigkeiten |
 | PDF | serverseitig HTML → PDF (Playwright/Chromium) | exakt gleiches Layout wie die Ansicht |
 | Benachrichtigung | **ntfy** (Push aufs Handy/iPad über die ntfy-App, Dienst ntfy.sh oder selbst betrieben) + E-Mail als Rückfall | gewünscht von matze; der Server schickt nur eine einfache HTTP-Nachricht, ohne eigenes App-Store-Konto |
 | Hosting | **Start auf matzes Homeserver („homesrv“)** als Docker-Container; Debian + Docker vorhanden; von außen erreichbar unter einer Subdomain von matzes eigener Domain (z.B. `kalender.<domain>`) über einen **Cloudflare Tunnel** (kostenlos, HTTPS, keine Portfreigabe am Router). Später bei Bedarf Umzug auf einen kleinen VPS in Deutschland (ca. 4–5 €/Monat), ohne Code-Änderung | Smoobu-Webhooks, die Portale (Sammel-iCal) und das iPad bei der Schwiegermutter müssen den Server aus dem Internet erreichen |

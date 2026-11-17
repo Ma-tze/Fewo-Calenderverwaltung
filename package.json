@@ -1,0 +1,12 @@
+{
+  "name": "fewo-kalender",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Einfacher Belegungskalender für Ferienwohnungen (iPad-Ansicht + PC-Verwaltung)",
+  "type": "module",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "start": "node server/index.js",
+    "test": "node --test test/*.test.js"
+  }
+}
