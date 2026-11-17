@@ -10,7 +10,9 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { Store } from './store.js';
-import { parseICS, buildICS, parsePastedPlan, isValidDay, addDays } from './ical.js';
+import { parseICS, buildICS, parsePastedPlan, parsePlanText, isValidDay, addDays } from './ical.js';
+import { execFile } from 'node:child_process';
+import os from 'node:os';
 import { fetchHolidays, expandSeasons } from './holidays.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -99,6 +101,28 @@ function send(res, status, body, type = 'application/json; charset=utf-8', extra
   res.end(typeof body === 'string' || Buffer.isBuffer(body) ? body : JSON.stringify(body));
 }
 
+function readRaw(req, limit) {
+  return new Promise((resolve, reject) => {
+    let size = 0; const chunks = [];
+    req.on('data', c => { size += c.length; if (size > limit) { reject(new Error('Datei zu groß')); req.destroy(); } else chunks.push(c); });
+    req.on('end', () => resolve(Buffer.concat(chunks)));
+    req.on('error', reject);
+  });
+}
+
+function pdfToText(buf) {
+  return new Promise((resolve, reject) => {
+    if (buf.subarray(0, 5).toString() !== '%PDF-') return reject(new Error('Das ist keine PDF-Datei.'));
+    const file = path.join(os.tmpdir(), `plan-${crypto.randomBytes(6).toString('hex')}.pdf`);
+    fs.writeFileSync(file, buf);
+    execFile('pdftotext', ['-layout', '-enc', 'UTF-8', file, '-'], { timeout: 20000, maxBuffer: 5e6 }, (err, out) => {
+      fs.rm(file, () => {});
+      if (err) return reject(new Error(err.code === 'ENOENT' ? 'PDF-Import ist auf diesem Server nicht verfügbar (pdftotext fehlt).' : 'PDF konnte nicht gelesen werden.'));
+      resolve(out);
+    });
+  });
+}
+
 function readJson(req) {
   return new Promise((resolve, reject) => {
     let size = 0; const chunks = [];
@@ -140,7 +164,7 @@ async function handle(req, res, mode) {
   if (feed && req.method === 'GET') {
     const apt = store.apartment(+feed[1]);
     if (!apt || apt.source !== 'own' || !safeEqual(feed[2], store.data.feedToken)) return send(res, 404, 'Nicht gefunden', 'text/plain');
-    return send(res, 200, buildICS(store.data.firm, { name: `${apt.name} ${apt.nick}` }), 'text/calendar; charset=utf-8');
+    return send(res, 200, buildICS(store.data.firm, { name: `${apt.name} ${apt.nick}`, includeNotes: false }), 'text/calendar; charset=utf-8');
   }
 
   // Zugangsschutz
@@ -300,6 +324,36 @@ async function handleAdmin(req, res, p, url) {
     store.save();
     return send(res, 200, { ok: true });
   }
+  // Vorschau: Text oder PDF lesen, noch nichts speichern
+  if (p === '/api/admin/firm/parse' && m === 'POST') {
+    const { text } = await readJson(req);
+    return send(res, 200, parsePlanText(text || ''));
+  }
+  if (p === '/api/admin/firm/pdf' && m === 'POST') {
+    const text = await pdfToText(await readRaw(req, 5e6));
+    return send(res, 200, parsePlanText(text));
+  }
+  // Übernehmen, optional bestehende Einträge im Zeitraum des Plans ersetzen
+  if (p === '/api/admin/firm/import' && m === 'POST') {
+    const { rows, replace } = await readJson(req);
+    if (!Array.isArray(rows) || !rows.length) throw new Error('Keine Zeiträume zum Übernehmen.');
+    const clean = rows.map(cleanFirm);
+    let removed = 0;
+    if (replace) {
+      const min = clean.reduce((a, r) => (r.from < a ? r.from : a), clean[0].from);
+      const max = clean.reduce((a, r) => (r.to > a ? r.to : a), clean[0].to);
+      const before = d.firm.length;
+      d.firm = d.firm.filter(e => !(e.from < max && e.to > min));
+      removed = before - d.firm.length;
+    } else {
+      // exakte Dubletten nicht doppelt anlegen
+      for (let i = clean.length - 1; i >= 0; i--) if (d.firm.some(e => e.from === clean[i].from && e.to === clean[i].to && e.name === clean[i].name)) clean.splice(i, 1);
+    }
+    clean.forEach(r => d.firm.push({ id: store.nextFirmId(), ...r }));
+    store.save();
+    return send(res, 200, { added: clean.length, removed });
+  }
+
   if (p === '/api/admin/firm/paste' && m === 'POST') {
     const { text } = await readJson(req);
     const rows = parsePastedPlan(text || '');

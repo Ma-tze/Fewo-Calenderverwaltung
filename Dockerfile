@@ -4,6 +4,7 @@ ENV NODE_ENV=production \
     DATA_DIR=/data \
     VIEW_PORT=8080 \
     ADMIN_PORT=8081
+RUN apt-get update && apt-get install -y --no-install-recommends poppler-utils && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY package.json ./
 COPY server ./server

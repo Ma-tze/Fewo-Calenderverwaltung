@@ -69,7 +69,7 @@ function fold(line) {
   return out.join('\r\n');
 }
 
-export function buildICS(entries, { name = 'Fewo-Kalender', uidDomain = 'fewo-kalender' } = {}) {
+export function buildICS(entries, { name = 'Fewo-Kalender', uidDomain = 'fewo-kalender', includeNotes = true } = {}) {
   const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
   const lines = [
     'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Fewo-Kalender//DE', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH',
@@ -82,29 +82,51 @@ export function buildICS(entries, { name = 'Fewo-Kalender', uidDomain = 'fewo-ka
       `DTSTART;VALUE=DATE:${e.from.replace(/-/g, '')}`,
       `DTEND;VALUE=DATE:${e.to.replace(/-/g, '')}`,
       `SUMMARY:${escapeText(e.name || 'Belegt')}`);
-    if (e.note) lines.push(`DESCRIPTION:${escapeText(e.note)}`);
+    if (includeNotes && e.note) lines.push(`DESCRIPTION:${escapeText(e.note)}`);
     lines.push('END:VEVENT');
   }
   lines.push('END:VCALENDAR');
   return lines.map(fold).join('\r\n') + '\r\n';
 }
 
-// Zeilen wie "04.05.2027 – 29.05.2027 Hr. Novak" oder "1.6.27 bis 30.6.27 Team B"
-export function parsePastedPlan(text) {
-  const re = /(\d{1,2})\.(\d{1,2})\.(\d{2,4})\s*(?:-|–|—|bis)\s*(\d{1,2})\.(\d{1,2})\.(\d{2,4})\s*(.*)/i;
+// Liest Zeiträume aus eingefügtem Text oder aus dem Text eines PDF-Belegungsplans.
+// Unterstützt einfache Zeilen ("04.05.2027 – 29.05.2027 Hr. Novak") und die Zeilen des
+// Firmen-Belegungsplans ("27.03.2027  03.04.2027  7  Vorname  Nachname  3  1 ( 17;)  NEIN  Telefon  Handy").
+// Zeilen mit "Keine Belegung" werden übersprungen.
+export function parsePlanText(text) {
+  const re = /(\d{1,2})\.(\d{1,2})\.(\d{2,4})\s*(?:-|–|—|bis)?\s*(\d{1,2})\.(\d{1,2})\.(\d{2,4})\s*(.*)/i;
   const yr = y => (y.length === 2 ? 2000 + +y : +y);
   const pad = n => String(n).padStart(2, '0');
-  const out = [];
+  const rows = [];
+  let skipped = 0;
   for (const line of String(text).split(/\r?\n/)) {
     const m = line.match(re);
     if (!m) continue;
     const from = `${yr(m[3])}-${pad(m[2])}-${pad(m[1])}`;
     const to = `${yr(m[6])}-${pad(m[5])}-${pad(m[4])}`;
     if (!isValidDay(from) || !isValidDay(to) || to <= from) continue;
-    out.push({ from, to, name: m[7].trim() || 'Firma', note: '' });
+    let rest = m[7].trim();
+    if (/keine\s+belegung/i.test(rest)) { skipped++; continue; }
+    rest = rest.replace(/^\d{1,3}\s+(?=\D)/, ''); // Spalte "Tage"
+    let name = rest, note = '';
+    const pm = rest.match(/^(.*?)\s+(\d{1,2})\s+(\d{1,2})\b(.*)$/);
+    if (pm && /[A-Za-zÄÖÜäöüß]/.test(pm[1])) {
+      name = pm[1];
+      const total = +pm[2], kids = +pm[3];
+      const parts = [];
+      if (total) parts.push(`${total} Reisende${kids ? `, davon ${kids} Kind${kids > 1 ? 'er' : ''}` : ''}`);
+      if (/\bJA\b/.test(pm[4])) parts.push('mit Hund');
+      note = parts.join(' · ');
+    }
+    name = name.replace(/\s+/g, ' ').trim();
+    const res = name.match(/^(.*?)\s*Reservierung!?$/i);
+    if (res) name = `${res[1] || 'Firma'} (Reservierung)`;
+    rows.push({ from, to, name: name || 'Firma', note });
   }
-  return out;
+  return { rows, skipped };
 }
+
+export function parsePastedPlan(text) { return parsePlanText(text).rows; }
 
 export function isValidDay(s) {
   if (typeof s !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;

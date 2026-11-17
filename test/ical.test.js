@@ -58,3 +58,22 @@ test('OpenHolidays-Antwort wird übernommen (Ende inklusive → exklusiv)', () =
   const r = mapOpenHolidays([{ startDate: '2026-12-23', endDate: '2027-01-09', name: [{ language: 'EN', text: 'Christmas' }, { language: 'DE', text: 'Weihnachtsferien' }] }], 'school');
   assert.deepEqual(r, [{ start: '2026-12-23', end: '2027-01-10', name: 'Weihnachtsferien', kind: 'school' }]);
 });
+
+test('Firmen-Belegungsplan (Text aus PDF) wird erkannt, freie Wochen übersprungen', async () => {
+  const { parsePlanText } = await import('../server/ical.js');
+  const text = [
+    '          Aufenthaltszeit                                Mitarbeiter                  Reisende                         Kommunikation',
+    '    27.03.2027    03.04.2027         7     Erika             Muster-Frau          3        1 ( 17;)     NEIN   0951000000    015100000000',
+    '                                           erika@example.org                  erika2@example.org',
+    '    03.04.2027    10.04.2027         7     Keine             Belegung!            0           0          0     0             0',
+    '    29.05.2027    05.06.2027         7     Beispiel AG       Reservierung!        0           0           0                   0',
+    '    10.07.2027    22.07.2027        12     Max               Mustermann           4        2 ( 7; 3;)   JA     0             017600000000',
+  ].join('\n');
+  const { rows, skipped } = parsePlanText(text);
+  assert.equal(skipped, 1);
+  assert.deepEqual(rows, [
+    { from: '2027-03-27', to: '2027-04-03', name: 'Erika Muster-Frau', note: '3 Reisende, davon 1 Kind' },
+    { from: '2027-05-29', to: '2027-06-05', name: 'Beispiel AG (Reservierung)', note: '' },
+    { from: '2027-07-10', to: '2027-07-22', name: 'Max Mustermann', note: '4 Reisende, davon 2 Kinder · mit Hund' },
+  ]);
+});

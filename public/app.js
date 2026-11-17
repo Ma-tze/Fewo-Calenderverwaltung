@@ -249,6 +249,7 @@
   let cfg = null;
   const firmSel = new Set();
   let pasteOpen = false;
+  let preview = null; // { rows, skipped, source }
 
   async function loadCfg() { cfg = await api('/api/admin/config'); }
 
@@ -332,15 +333,33 @@
       <td><button class="mini" type="button" data-fdel="${b.id}" aria-label="Zeile löschen">✕</button></td></tr>`).join('');
     const warn = rows.some(clash) ? '<div class="notice warn">Rot markierte Zeilen überschneiden sich.</div>' : '';
     return `<div class="tbl"><table><thead><tr><th></th><th>Von</th><th>Bis</th><th>Nächte</th><th>Bewohner / Bezeichnung</th><th>Notiz</th><th></th></tr></thead>
-      <tbody>${body || '<tr><td colspan="7" class="small">Noch keine Einträge. Mit „+ Zeile“ oder „Aus PDF-Text einfügen“ anlegen.</td></tr>'}</tbody></table></div>${warn}
-      <div class="row"><button class="mini" type="button" id="fAdd">+ Zeile</button><button class="mini" type="button" id="fPaste">Aus PDF-Text einfügen</button></div>
+      <tbody>${body || '<tr><td colspan="7" class="small">Noch keine Einträge. Mit „PDF-Belegungsplan hochladen“, „+ Zeile“ oder „Aus Text einfügen“ anlegen.</td></tr>'}</tbody></table></div>${warn}
+      <div class="row"><button class="mini" type="button" id="fAdd">+ Zeile</button>
+        <label class="mini" style="display:inline-flex;align-items:center;cursor:pointer">PDF-Belegungsplan hochladen …<input type="file" id="fPdf" accept="application/pdf,.pdf" hidden></label>
+        <button class="mini" type="button" id="fPaste">Aus Text einfügen</button></div>
+      ${preview ? previewBox() : ''}
       <div class="row"><b>Markierte (${firmSel.size}):</b> verschieben um <input class="in short" id="fShift" type="number" value="7"> Tage
         <button class="mini" type="button" id="fShiftGo" ${firmSel.size ? '' : 'disabled'}>Verschieben</button>
         <button class="mini" type="button" id="fDelSel" ${firmSel.size ? '' : 'disabled'}>Löschen</button>
         <button class="mini" type="button" id="fAll" ${rows.length ? '' : 'disabled'}>Alle markieren</button>
         <button class="mini" type="button" id="fNone" ${firmSel.size ? '' : 'disabled'}>Keine</button></div>
-      ${pasteOpen ? `<label class="row" style="flex-direction:column;align-items:stretch">Zeilen aus dem PDF hier einfügen, eine pro Zeitraum, z. B. „04.05.2027 – 29.05.2027 Hr. Novak“<textarea id="fPasteText" class="in" rows="5"></textarea></label>
-        <div class="row"><button class="btn primary" type="button" id="fPasteGo">Übernehmen</button><button class="btn" type="button" id="fPasteNo">Abbrechen</button></div>` : ''}`;
+      ${pasteOpen ? `<label class="row" style="flex-direction:column;align-items:stretch">Zeilen hier einfügen, eine pro Zeitraum, z. B. „04.05.2027 – 29.05.2027 Hr. Novak“<textarea id="fPasteText" class="in" rows="5"></textarea></label>
+        <div class="row"><button class="btn primary" type="button" id="fPasteGo">Vorschau</button><button class="btn" type="button" id="fPasteNo">Abbrechen</button></div>` : ''}`;
+  }
+
+  function previewBox() {
+    const r = preview.rows;
+    const body = r.map(x => `<tr><td>${fy(D(x.from))}</td><td>${fy(D(x.to))}</td><td>${diff(D(x.from), D(x.to))}</td><td>${esc(x.name)}</td><td>${esc(x.note)}</td></tr>`).join('');
+    const min = r.length ? r.reduce((a, x) => (x.from < a ? x.from : a), r[0].from) : null;
+    const max = r.length ? r.reduce((a, x) => (x.to > a ? x.to : a), r[0].to) : null;
+    return `<div class="sec" style="border-color:var(--accent)">
+      <h3>Vorschau${preview.source ? `: ${esc(preview.source)}` : ''}</h3>
+      <p class="d">${r.length} Belegungen erkannt${preview.skipped ? `, ${preview.skipped} Wochen ohne Belegung übersprungen` : ''}. Bitte kurz prüfen.</p>
+      ${r.length ? `<div class="tbl"><table><thead><tr><th>Von</th><th>Bis</th><th>Nächte</th><th>Bewohner / Bezeichnung</th><th>Notiz</th></tr></thead><tbody>${body}</tbody></table></div>
+      <label class="row"><input type="checkbox" id="pvReplace" checked> Bestehende Einträge zwischen ${fy(D(min))} und ${fy(D(max))} durch den neuen Plan ersetzen</label>
+      <div class="row"><button class="btn primary" type="button" id="pvGo">Übernehmen</button><button class="btn" type="button" id="pvNo">Abbrechen</button></div>`
+      : `<div class="row"><button class="btn" type="button" id="pvNo">Schließen</button></div>`}
+    </div>`;
   }
 
   async function act(fn, okMsg) {
@@ -405,9 +424,27 @@
       $('#fPasteGo').onclick = () => {
         const text = $('#fPasteText').value;
         pasteOpen = false;
-        let added = 0;
-        act(async () => { added = (await post('/api/admin/firm/paste', { text })).added; if (!added) throw new Error('Keine Zeiträume erkannt. Format: 04.05.2027 – 29.05.2027 Name'); })
-          .then(() => added && toast(`${added} Zeiträume übernommen.`));
+        act(async () => { preview = { ...(await post('/api/admin/firm/parse', { text })), source: 'eingefügter Text' }; });
+      };
+    }
+    $('#fPdf').onchange = e => {
+      const file = e.target.files[0];
+      if (!file) return;
+      act(async () => {
+        const res = await fetch('/api/admin/firm/pdf', { method: 'POST', headers: { 'Content-Type': 'application/pdf' }, body: file });
+        const j = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(j.error || `Fehler ${res.status}`);
+        preview = { ...j, source: file.name };
+      });
+    };
+    if (preview) {
+      $('#pvNo').onclick = () => { preview = null; act(async () => {}); };
+      if ($('#pvGo')) $('#pvGo').onclick = () => {
+        const body = { rows: preview.rows, replace: $('#pvReplace').checked };
+        preview = null;
+        let r = null;
+        act(async () => { r = await post('/api/admin/firm/import', body); })
+          .then(() => r && toast(`${r.added} Belegungen übernommen${r.removed ? `, ${r.removed} alte ersetzt` : ''}.`));
       };
     }
 
