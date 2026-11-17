@@ -1,0 +1,524 @@
+<title>Fewo-Kalender Mockup</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Lexend:wght@500;700&display=swap">
+<style>
+/* Layout: iPad-Querformat, Kopfzeile oben, Belegungsraster in der Mitte, feste Bedienleiste unten */
+:root {
+  --bg: #eef2f0; --surface: #ffffff; --fg: #18211d; --muted: #4b5852; --line: #d3dbd7; --soft: #e4eae7;
+  --accent: #1d6a86; --accent-fg: #ffffff; --today: #c2410c; --warn: #b42318; --ok: #1e7a46;
+  --a1: #5b6878; --a2: #2a72b0; --a3: #2b7d4c; --a4: #a0560f; --bar-fg: #ffffff;
+  --weekend: #f5f1e8;
+  --font-body: "Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif;
+  --font-head: "Lexend", "Atkinson Hyperlegible", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #111816; --surface: #19221f; --fg: #e9efec; --muted: #a8b5af; --line: #2d3a35; --soft: #222d29;
+  --accent: #5cb2d2; --accent-fg: #0d1a1f; --today: #fb8a4c; --warn: #f97066; --ok: #5bc48a;
+  --a1: #657386; --a2: #2f7cc0; --a3: #2f8a55; --a4: #ad6216; --bar-fg: #ffffff; --weekend: #1f2622;
+  color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #111816; --surface: #19221f; --fg: #e9efec; --muted: #a8b5af; --line: #2d3a35; --soft: #222d29;
+  --accent: #5cb2d2; --accent-fg: #0d1a1f; --today: #fb8a4c; --warn: #f97066; --ok: #5bc48a;
+  --a1: #657386; --a2: #2f7cc0; --a3: #2f8a55; --a4: #ad6216; --bar-fg: #ffffff; --weekend: #1f2622;
+  color-scheme: dark }
+
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body { background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 19px; line-height: 1.4;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 16px 0; }
+button { font: inherit; color: inherit; cursor: pointer; }
+button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.app { max-width: 1180px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; min-height: 100%; }
+.hint { font-size: 15px; color: var(--muted); background: var(--soft); border-radius: 10px; padding: 8px 14px; }
+
+header.top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+.top h1 { font-family: var(--font-head); font-weight: 700; font-size: 30px; margin: 0; text-wrap: balance; }
+.top .sub { color: var(--muted); font-size: 17px; }
+.top-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.chip { border: 2px solid var(--line); background: var(--surface); border-radius: 999px; padding: 8px 16px; font-weight: 700; min-height: 48px; }
+.chip.alert { border-color: var(--today); color: var(--today); }
+.chip.alert .n { background: var(--today); color: var(--surface); border-radius: 999px; padding: 0 9px; margin-right: 6px; }
+
+.toolbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.toolbar h2 { font-family: var(--font-head); font-size: 24px; margin: 0; font-weight: 500; }
+.arrows { display: flex; gap: 10px; }
+.btn { min-height: 52px; padding: 0 20px; border-radius: 12px; border: 2px solid var(--line); background: var(--surface); font-weight: 700; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
+.btn.danger { border-color: var(--warn); color: var(--warn); }
+.btn[disabled] { opacity: .45; cursor: not-allowed; }
+.summary { font-size: 18px; color: var(--muted); }
+.summary b { color: var(--fg); }
+
+.board { background: var(--surface); border: 2px solid var(--line); border-radius: 16px; overflow-x: auto; }
+.grid { display: grid; position: relative; min-width: 900px; }
+.grid .hd { border-bottom: 2px solid var(--line); text-align: center; font-size: 15px; padding: 6px 0; color: var(--muted); font-variant-numeric: tabular-nums; }
+.grid .hd b { display: block; font-size: 19px; color: var(--fg); }
+.grid .hd.we { background: var(--weekend); }
+.grid .hd.today { background: var(--today); color: var(--surface); border-radius: 10px 10px 0 0; }
+.grid .hd.today b { color: var(--surface); }
+.grid .lbl { position: sticky; left: 0; z-index: 3; background: var(--surface); border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 10px; padding: 0 12px; font-weight: 700; }
+.grid .lbl .dot { width: 18px; height: 18px; border-radius: 6px; flex: none; }
+.grid .lbl small { display: block; font-weight: 400; font-size: 14px; color: var(--muted); }
+.grid .cell { border-bottom: 1px solid var(--line); border-left: 1px solid var(--soft); background: transparent; border-top: 0; border-right: 0; padding: 0; }
+.grid .cell.we { background: var(--weekend); }
+.grid .cell.today { box-shadow: inset 3px 0 0 var(--today), inset -3px 0 0 var(--today); }
+.grid .cell:hover { background: var(--soft); }
+.bar { z-index: 2; align-self: center; height: 70%; border-radius: 10px; color: var(--bar-fg); border: 0; text-align: left; padding: 0 12px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; box-shadow: 0 1px 0 rgba(0,0,0,.15); }
+.bar.firm { border-radius: 6px; opacity: .9; font-weight: 400; }
+.bar .src { font-weight: 400; opacity: .9; margin-left: 8px; font-size: .85em; }
+.compact .bar { padding: 0 6px; font-size: 14px; }
+.compact .hd { font-size: 12px; padding: 4px 0; }
+.compact .hd b { font-size: 13px; }
+.monthmark { font-weight: 700; color: var(--fg); }
+
+.legend { display: flex; flex-wrap: wrap; gap: 18px; font-size: 16px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 8px; }
+.legend i { width: 26px; height: 12px; border-radius: 4px; display: inline-block; }
+
+/* Jahr */
+.year { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
+.month { background: var(--surface); border: 2px solid var(--line); border-radius: 14px; padding: 12px 14px; text-align: left; display: flex; flex-direction: column; gap: 8px; }
+.month:hover { border-color: var(--accent); }
+.month h3 { margin: 0; font-family: var(--font-head); font-size: 20px; font-weight: 500; display: flex; justify-content: space-between; align-items: baseline; }
+.month h3 span { font-family: var(--font-body); font-size: 15px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.mrow { display: grid; gap: 1px; height: 14px; }
+.mrow i { background: var(--soft); border-radius: 2px; }
+
+/* Leiste unten */
+nav.dock { position: sticky; bottom: 0; z-index: 20; background: var(--bg); padding-block: 10px calc(12px + env(safe-area-inset-bottom, 0px)); display: grid; grid-template-columns: repeat(4, 1fr) 1.4fr; gap: 10px; margin-top: auto; }
+nav.dock button { min-height: 64px; border-radius: 14px; border: 2px solid var(--line); background: var(--surface); font-weight: 700; font-size: 19px; }
+nav.dock button[aria-current="true"] { border-color: var(--accent); box-shadow: inset 0 -5px 0 var(--accent); }
+nav.dock .new { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); font-size: 21px; }
+
+/* Overlays */
+.overlay { position: fixed; inset: 0; z-index: 50; background: rgba(10,16,14,.55); display: flex; align-items: center; justify-content: center; padding: max(16px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) max(16px, env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); }
+.sheet { background: var(--surface); color: var(--fg); border-radius: 20px; width: min(720px, 100%); max-height: 100%; overflow: auto; padding: 24px 26px; display: flex; flex-direction: column; gap: 16px; }
+.sheet h2 { font-family: var(--font-head); font-size: 28px; margin: 0; font-weight: 700; text-wrap: balance; }
+.sheet .stepinfo { color: var(--muted); font-size: 16px; }
+.facts { display: grid; grid-template-columns: max-content 1fr; gap: 8px 20px; margin: 0; }
+.facts dt { color: var(--muted); }
+.facts dd { margin: 0; font-weight: 700; min-width: 0; overflow-wrap: anywhere; }
+.row { display: flex; flex-wrap: wrap; gap: 10px; }
+.row.end { justify-content: flex-end; }
+.notice { border-radius: 12px; padding: 12px 16px; background: var(--soft); }
+.notice.warn { color: var(--warn); border: 2px solid var(--warn); background: transparent; font-weight: 700; }
+.choices { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+.choice { min-height: 84px; border-radius: 14px; border: 3px solid var(--line); background: var(--surface); font-weight: 700; font-size: 20px; display: flex; align-items: center; gap: 12px; padding: 0 16px; text-align: left; }
+.choice[aria-pressed="true"] { border-color: var(--accent); background: var(--soft); }
+.choice .dot { width: 22px; height: 22px; border-radius: 7px; flex: none; }
+.choice small { display: block; font-weight: 400; font-size: 15px; color: var(--muted); }
+label.f { display: flex; flex-direction: column; gap: 6px; font-weight: 700; }
+label.f input, label.f textarea { font: inherit; font-weight: 400; font-size: 21px; padding: 12px 14px; border: 2px solid var(--line); border-radius: 12px; background: var(--bg); color: var(--fg); width: 100%; }
+.stepper { display: flex; align-items: center; gap: 16px; }
+.stepper button { width: 60px; height: 60px; border-radius: 14px; border: 2px solid var(--line); background: var(--surface); font-size: 30px; font-weight: 700; }
+.stepper output { font-size: 32px; font-weight: 700; min-width: 2ch; text-align: center; font-variant-numeric: tabular-nums; }
+.cal { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
+.cal .wd { text-align: center; color: var(--muted); font-size: 15px; }
+.cal button { min-height: 52px; border-radius: 10px; border: 2px solid var(--line); background: var(--surface); font-weight: 700; font-variant-numeric: tabular-nums; }
+.cal button.busy { background: repeating-linear-gradient(135deg, var(--soft) 0 6px, transparent 6px 12px); color: var(--muted); }
+.cal button.sel { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
+.cal button.range { background: var(--soft); border-color: var(--accent); }
+.calhead { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.calhead strong { font-family: var(--font-head); font-size: 22px; font-weight: 500; }
+.big-sentence { font-size: 23px; line-height: 1.45; }
+.list { display: flex; flex-direction: column; gap: 10px; }
+.task { display: flex; justify-content: space-between; align-items: center; gap: 12px; border: 2px solid var(--line); border-radius: 12px; padding: 10px 14px; flex-wrap: wrap; }
+.task.done { opacity: .5; text-decoration: line-through; }
+
+.toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(100px + env(safe-area-inset-bottom, 0px)); z-index: 60; background: var(--fg); color: var(--bg); border-radius: 14px; padding: 14px 20px; font-weight: 700; display: flex; gap: 16px; align-items: center; max-width: calc(100% - 32px); }
+.toast button { background: transparent; border: 2px solid var(--bg); color: var(--bg); border-radius: 10px; padding: 6px 14px; font-weight: 700; }
+
+@media (max-width: 700px) {
+  body { font-size: 17px; }
+  nav.dock { grid-template-columns: repeat(2, 1fr); }
+  nav.dock .new { grid-column: 1 / -1; }
+  .top h1 { font-size: 24px; }
+}
+@media (prefers-reduced-motion: no-preference) { .bar, .choice, .btn { transition: background .15s, border-color .15s; } }
+</style>
+
+<div class="app">
+  <div class="hint">Mockup mit Beispieldaten. Heute ist hier fest der 17.11.2026. Alles ist antippbar, gespeichert wird nichts.</div>
+
+  <header class="top">
+    <div>
+      <h1>Belegung Ferienwohnungen</h1>
+      <div class="sub" id="todayline"></div>
+    </div>
+    <div class="top-actions">
+      <button class="chip" id="pdfBtn" type="button">Monat als PDF</button>
+      <button class="chip alert" id="taskBtn" type="button"></button>
+    </div>
+  </header>
+
+  <div class="toolbar">
+    <h2 id="rangeTitle"></h2>
+    <div class="arrows">
+      <button class="btn" id="prevBtn" type="button">◀ früher</button>
+      <button class="btn" id="nextBtn" type="button">später ▶</button>
+    </div>
+  </div>
+
+  <div class="summary" id="summary"></div>
+  <main id="view"></main>
+  <div class="legend" id="legend"></div>
+
+  <nav class="dock" aria-label="Ansicht wählen">
+    <button type="button" data-nav="today">Heute</button>
+    <button type="button" data-nav="w4">4 Wochen</button>
+    <button type="button" data-nav="m3">3 Monate</button>
+    <button type="button" data-nav="year">Jahr</button>
+    <button type="button" class="new" data-nav="new">+ Neue Buchung</button>
+  </nav>
+</div>
+
+<div id="overlayRoot"></div>
+<div id="toastRoot"></div>
+
+<script>
+const TODAY = new Date(2026, 10, 17);
+const MONTHS = ["Januar","Februar","März","April","Mai","Juni","Juli","August","September","Oktober","November","Dezember"];
+const WD = ["So","Mo","Di","Mi","Do","Fr","Sa"];
+const WDL = ["Sonntag","Montag","Dienstag","Mittwoch","Donnerstag","Freitag","Samstag"];
+
+const APTS = [
+  { id: 1, name: "Fewo 1", nick: "Firma", color: "var(--a1)", smoobu: false },
+  { id: 2, name: "Fewo 2", nick: "Seeblick", color: "var(--a2)", smoobu: true },
+  { id: 3, name: "Fewo 3", nick: "Garten", color: "var(--a3)", smoobu: true },
+  { id: 4, name: "Fewo 4", nick: "Wiese", color: "var(--a4)", smoobu: true },
+];
+const SOURCES = ["Telefon / E-Mail", "FeWo-Bodensee", "Bodenseeurlaub", "TouristInfo"];
+const READONLY = ["Booking.com", "Airbnb"];
+
+const D = s => { const [y, m, d] = s.split("-").map(Number); return new Date(y, m - 1, d); };
+const add = (dt, n) => { const r = new Date(dt); r.setDate(r.getDate() + n); return r; };
+const diff = (a, b) => Math.round((b - a) / 86400000);
+const same = (a, b) => diff(a, b) === 0;
+const f = dt => `${dt.getDate()}.${dt.getMonth() + 1}.`;
+const fy = dt => `${f(dt)}${dt.getFullYear()}`;
+const fl = dt => `${WDL[dt.getDay()]}, ${dt.getDate()}. ${MONTHS[dt.getMonth()]}`;
+const startOfWeek = dt => add(dt, -((dt.getDay() + 6) % 7));
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+let uid = 1;
+const B = (apt, arr, dep, name, src, extra = {}) => ({ id: uid++, apt, arr: D(arr), dep: D(dep), name, src, guests: 2, price: null, phone: "", addr: "", note: "", ...extra });
+let bookings = [
+  { id: uid++, apt: 1, arr: D("2025-01-01"), dep: D("2028-01-01"), name: "Dauermiete Firma Schwarz GmbH", src: "Mietvertrag", firm: true },
+  B(2, "2026-11-14", "2026-11-21", "Maier", "Telefon / E-Mail", { guests: 2, price: 595, phone: "07545 123456", addr: "Lindenstr. 4, 88045 Friedrichshafen", note: "Hund (klein)" }),
+  B(2, "2026-11-24", "2026-12-01", "Huber", "FeWo-Bodensee", { guests: 3, price: 640, phone: "0711 998877", addr: "Am Markt 2, 70173 Stuttgart" }),
+  B(2, "2026-12-22", "2027-01-02", "Familie Schulz", "Booking.com", { guests: 4, price: 1210 }),
+  B(3, "2026-11-18", "2026-11-29", "Schmidt", "Bodenseeurlaub", { guests: 2, price: 880, phone: "089 445566", addr: "Isarweg 9, 80331 München", note: "Anreise erst gegen 20 Uhr" }),
+  B(3, "2026-12-05", "2026-12-12", "Becker", "Telefon / E-Mail", { guests: 2, price: 560, phone: "07541 22334", addr: "Seestr. 11, 88085 Langenargen" }),
+  B(3, "2026-12-28", "2027-01-04", "Neubauer", "Airbnb", { guests: 2, price: 720 }),
+  B(4, "2026-11-21", "2026-11-25", "Weber", "TouristInfo", { guests: 1, price: 280, phone: "0751 55667", addr: "Bergweg 3, 88212 Ravensburg" }),
+  B(4, "2026-12-01", "2026-12-06", "Kraus", "Telefon / E-Mail", { guests: 2, price: 375, phone: "0170 1234567" }),
+  B(4, "2026-12-19", "2026-12-27", "Neumann", "FeWo-Bodensee", { guests: 4, price: 760 }),
+  B(2, "2026-06-27", "2026-07-11", "Hoffmann", "Booking.com"), B(3, "2026-07-04", "2026-07-18", "Wagner", "Telefon / E-Mail"),
+  B(4, "2026-07-11", "2026-07-25", "Koch", "FeWo-Bodensee"), B(2, "2026-07-25", "2026-08-15", "Richter", "Bodenseeurlaub"),
+  B(3, "2026-08-01", "2026-08-22", "Klein", "Airbnb"), B(4, "2026-08-08", "2026-08-29", "Wolf", "TouristInfo"),
+  B(2, "2026-09-05", "2026-09-19", "Schröder", "Telefon / E-Mail"), B(3, "2026-09-12", "2026-09-26", "Lange", "Booking.com"),
+  B(4, "2026-10-03", "2026-10-17", "Krüger", "FeWo-Bodensee"), B(2, "2026-10-10", "2026-10-24", "Hartmann", "Telefon / E-Mail"),
+  B(2, "2026-05-13", "2026-05-17", "Werner", "Airbnb"), B(3, "2026-05-23", "2026-06-06", "Schmitt", "Telefon / E-Mail"),
+  B(4, "2026-04-02", "2026-04-11", "Zimmermann", "Bodenseeurlaub"), B(2, "2026-03-28", "2026-04-06", "Braun", "Telefon / E-Mail"),
+  B(2, "2027-03-25", "2027-04-03", "Krause", "Telefon / E-Mail"), B(3, "2027-05-14", "2027-05-24", "Meier", "Booking.com"),
+  B(2, "2027-07-03", "2027-07-17", "Lehmann", "Telefon / E-Mail"), B(3, "2027-07-10", "2027-07-31", "Fuchs", "FeWo-Bodensee"),
+  B(4, "2027-07-24", "2027-08-14", "Peters", "TouristInfo"), B(2, "2027-08-07", "2027-08-28", "Scholz", "Airbnb"),
+];
+
+let tasks = [
+  { id: 1, text: "Bei TouristInfo nachtragen: Fewo 3, 18.11.–29.11. blockieren", done: false },
+];
+
+const state = { view: "w4", start: startOfWeek(TODAY), m3: new Date(TODAY.getFullYear(), TODAY.getMonth(), 1), year: TODAY.getFullYear() };
+
+const $ = s => document.querySelector(s);
+const aptOf = id => APTS.find(a => a.id === id);
+const overlapping = (from, to) => bookings.filter(b => b.arr < to && b.dep > from);
+
+function toast(text, undo) {
+  const root = $("#toastRoot");
+  root.innerHTML = `<div class="toast" role="status"><span>${esc(text)}</span>${undo ? '<button type="button" id="undoBtn">Rückgängig</button>' : ""}</div>`;
+  clearTimeout(toast.t);
+  if (undo) $("#undoBtn").onclick = () => { undo(); root.innerHTML = ""; };
+  toast.t = setTimeout(() => (root.innerHTML = ""), undo ? 10000 : 4000);
+}
+
+function renderTop() {
+  $("#todayline").textContent = `Heute: ${fl(TODAY)} ${TODAY.getFullYear()} · Stand 12:40 Uhr`;
+  const open = tasks.filter(t => !t.done).length;
+  const btn = $("#taskBtn");
+  btn.innerHTML = open ? `<span class="n">${open}</span>Nachträge offen` : "Keine Nachträge offen";
+  btn.classList.toggle("alert", open > 0);
+  document.querySelectorAll("nav.dock [data-nav]").forEach(b => b.setAttribute("aria-current", b.dataset.nav === state.view ? "true" : "false"));
+  $("#legend").innerHTML = APTS.map(a => `<span><i style="background:${a.color}"></i>${a.name} „${a.nick}“</span>`).join("") + `<span>Halbe Felder = Anreise/Abreise am Nachmittag/Vormittag</span>`;
+}
+
+function renderGrid(start, n, compact) {
+  const cols = `${compact ? 150 : 190}px repeat(${2 * n}, minmax(0, 1fr))`;
+  const rowH = compact ? 54 : 78;
+  let h = `<div class="grid ${compact ? "compact" : ""}" style="grid-template-columns:${cols};grid-template-rows:auto repeat(${APTS.length}, ${rowH}px);${compact ? "min-width:1400px" : ""}">`;
+  h += `<div class="hd" style="grid-column:1;grid-row:1"></div>`;
+  for (let i = 0; i < n; i++) {
+    const dt = add(start, i), we = dt.getDay() === 0 || dt.getDay() === 6, td = same(dt, TODAY);
+    const top = compact ? (dt.getDate() === 1 ? `<span class="monthmark">${MONTHS[dt.getMonth()].slice(0, 3)}</span>` : WD[dt.getDay()][0]) : WD[dt.getDay()];
+    h += `<div class="hd ${we ? "we" : ""} ${td ? "today" : ""}" style="grid-column:${2 + 2 * i} / span 2;grid-row:1">${top}<b>${dt.getDate()}</b></div>`;
+  }
+  APTS.forEach((a, r) => {
+    const row = r + 2;
+    h += `<div class="lbl" style="grid-column:1;grid-row:${row}"><span class="dot" style="background:${a.color}"></span><span>${a.name}<small>${a.nick}</small></span></div>`;
+    for (let i = 0; i < n; i++) {
+      const dt = add(start, i), we = dt.getDay() === 0 || dt.getDay() === 6;
+      h += `<button type="button" class="cell ${we ? "we" : ""} ${same(dt, TODAY) ? "today" : ""}" style="grid-column:${2 + 2 * i} / span 2;grid-row:${row}" data-free="${a.id}|${i}" aria-label="${a.name} ${fl(dt)}"></button>`;
+    }
+    bookings.filter(b => b.apt === a.id && !b.cancelled && b.arr < add(start, n) && b.dep > start).forEach(b => {
+      const si = diff(start, b.arr), ei = diff(start, b.dep);
+      const c0 = si < 0 ? 2 : 3 + 2 * si, c1 = ei >= n ? 2 + 2 * n : 3 + 2 * ei;
+      const label = b.firm ? b.name : `${esc(b.name)}${compact ? "" : `<span class="src">${esc(b.src)}</span>`}`;
+      h += `<button type="button" class="bar ${b.firm ? "firm" : ""}" style="grid-column:${c0} / ${c1};grid-row:${row};background:${a.color}" data-booking="${b.id}">${label}</button>`;
+    });
+  });
+  return h + `</div>`;
+}
+
+function renderSummary(start, n) {
+  const end = add(start, n);
+  const arr = bookings.filter(b => !b.firm && !b.cancelled && b.arr >= start && b.arr < end).length;
+  const dep = bookings.filter(b => !b.firm && !b.cancelled && b.dep >= start && b.dep < end).length;
+  const wkEnd = add(startOfWeek(TODAY), 7);
+  const aw = bookings.filter(b => !b.firm && !b.cancelled && b.arr >= TODAY && b.arr < wkEnd);
+  return `Diese Woche: <b>${aw.length} Anreise${aw.length === 1 ? "" : "n"}</b>${aw.length ? " (" + aw.map(b => `${b.name}, ${WD[b.arr.getDay()]} ${f(b.arr)}`).join("; ") + ")" : ""} · Im Zeitraum: ${arr} Anreisen, ${dep} Abreisen`;
+}
+
+function renderYear() {
+  const y = state.year;
+  let h = `<div class="year">`;
+  for (let m = 0; m < 12; m++) {
+    const first = new Date(y, m, 1), days = new Date(y, m + 1, 0).getDate();
+    let nights = 0;
+    let rows = "";
+    APTS.forEach(a => {
+      let cells = "";
+      for (let d = 0; d < days; d++) {
+        const dt = new Date(y, m, d + 1);
+        const b = bookings.find(b => b.apt === a.id && !b.cancelled && b.arr <= dt && b.dep > dt);
+        if (b && !b.firm) nights++;
+        cells += `<i style="${b ? `background:${a.color}` : ""}"></i>`;
+      }
+      rows += `<div class="mrow" style="grid-template-columns:repeat(${days},1fr)" title="${a.name}">${cells}</div>`;
+    });
+    const pct = Math.round(100 * nights / (days * 3));
+    h += `<button type="button" class="month" data-month="${m}"><h3>${MONTHS[m]} <span>Fewo 2–4: ${pct} % belegt</span></h3>${rows}</button>`;
+  }
+  return h + `</div>`;
+}
+
+function render() {
+  renderTop();
+  const v = $("#view"), prev = $("#prevBtn"), next = $("#nextBtn");
+  if (state.view === "w4") {
+    const end = add(state.start, 27);
+    $("#rangeTitle").textContent = `4 Wochen: ${fy(state.start)} bis ${fy(end)}`;
+    $("#summary").innerHTML = renderSummary(state.start, 28);
+    v.innerHTML = `<div class="board">${renderGrid(state.start, 28, false)}</div>`;
+  } else if (state.view === "m3") {
+    const s = state.m3, e = new Date(s.getFullYear(), s.getMonth() + 3, 1), n = diff(s, e);
+    $("#rangeTitle").textContent = `3 Monate: ${MONTHS[s.getMonth()]} bis ${MONTHS[(s.getMonth() + 2) % 12]} ${add(e, -1).getFullYear()}`;
+    $("#summary").innerHTML = renderSummary(s, n);
+    v.innerHTML = `<div class="board">${renderGrid(s, n, true)}</div>`;
+  } else {
+    $("#rangeTitle").textContent = `Jahr ${state.year}`;
+    $("#summary").textContent = "Tippen Sie auf einen Monat, um ihn im Detail zu sehen.";
+    v.innerHTML = renderYear();
+  }
+  prev.onclick = () => { step(-1); };
+  next.onclick = () => { step(1); };
+}
+
+function step(dir) {
+  if (state.view === "w4") state.start = add(state.start, 7 * dir);
+  else if (state.view === "m3") state.m3 = new Date(state.m3.getFullYear(), state.m3.getMonth() + dir, 1);
+  else state.year += dir;
+  render();
+}
+
+document.addEventListener("click", e => {
+  const nav = e.target.closest("[data-nav]");
+  if (nav) {
+    const k = nav.dataset.nav;
+    if (k === "new") return openWizard({});
+    if (k === "today") { state.view = "w4"; state.start = startOfWeek(TODAY); }
+    else state.view = k;
+    return render();
+  }
+  const bar = e.target.closest("[data-booking]");
+  if (bar) return openBooking(+bar.dataset.booking);
+  const free = e.target.closest("[data-free]");
+  if (free) {
+    const [apt, i] = free.dataset.free.split("|").map(Number);
+    const base = state.view === "w4" ? state.start : state.m3;
+    if (apt === 1) return toast("Fewo 1 ist dauerhaft an die Firma vermietet.");
+    return openWizard({ apt, arr: add(base, i) });
+  }
+  const mon = e.target.closest("[data-month]");
+  if (mon) { state.view = "w4"; state.start = startOfWeek(new Date(state.year, +mon.dataset.month, 1)); return render(); }
+});
+
+$("#pdfBtn").onclick = () => toast("Erstellt ein PDF des Monats (A4 quer). Im Mockup nicht aktiv.");
+$("#taskBtn").onclick = openTasks;
+
+function overlay(html) {
+  $("#overlayRoot").innerHTML = `<div class="overlay" id="ov"><div class="sheet" role="dialog" aria-modal="true">${html}</div></div>`;
+  $("#ov").addEventListener("click", e => { if (e.target.id === "ov") closeOverlay(); });
+}
+function closeOverlay() { $("#overlayRoot").innerHTML = ""; }
+
+function openBooking(id) {
+  const b = bookings.find(x => x.id === id), a = aptOf(b.apt);
+  if (b.firm) {
+    overlay(`<h2>${esc(b.name)}</h2><div class="notice">${a.name} ist durchgängig an die Firma vermietet. Hier gibt es nichts zu pflegen.</div><div class="row end"><button class="btn primary" type="button" id="closeB">Schließen</button></div>`);
+    return ($("#closeB").onclick = closeOverlay);
+  }
+  const nights = diff(b.arr, b.dep), ro = READONLY.includes(b.src);
+  overlay(`
+    <h2>${esc(b.name)}</h2>
+    <dl class="facts">
+      <dt>Wohnung</dt><dd>${a.name} „${a.nick}“</dd>
+      <dt>Anreise</dt><dd>${fl(b.arr)} ${b.arr.getFullYear()}</dd>
+      <dt>Abreise</dt><dd>${fl(b.dep)} ${b.dep.getFullYear()}</dd>
+      <dt>Nächte</dt><dd>${nights}</dd>
+      <dt>Reisende</dt><dd>${b.guests ?? "–"}</dd>
+      <dt>Preis</dt><dd>${b.price ? b.price.toLocaleString("de-DE") + " €" : "–"}</dd>
+      <dt>Telefon</dt><dd>${esc(b.phone || "–")}</dd>
+      <dt>Adresse</dt><dd>${esc(b.addr || "–")}</dd>
+      <dt>Gebucht über</dt><dd>${esc(b.src)}</dd>
+      <dt>Notiz</dt><dd>${esc(b.note || "–")}</dd>
+    </dl>
+    ${ro ? `<div class="notice">Diese Buchung kam über ${esc(b.src)}. Ändern oder stornieren bitte direkt bei ${esc(b.src)}.</div>` : ""}
+    <div class="row end" id="bActions">
+      ${ro ? "" : `<button class="btn danger" type="button" id="cancelB">Stornieren</button><button class="btn" type="button" id="moveB">Verschieben</button><button class="btn" type="button" id="editB">Ändern</button>`}
+      <button class="btn primary" type="button" id="closeB">Schließen</button>
+    </div>`);
+  $("#closeB").onclick = closeOverlay;
+  if (ro) return;
+  $("#editB").onclick = () => toast("Ändern öffnet die gleichen Schritte wie „Neue Buchung“. Im Mockup nicht aktiv.");
+  $("#moveB").onclick = () => toast("Verschieben öffnet die Schritte mit vorausgefüllten Daten. Im Mockup nicht aktiv.");
+  $("#cancelB").onclick = () => {
+    $("#bActions").outerHTML = `<div class="notice warn">Buchung ${esc(b.name)} vom ${f(b.arr)} bis ${f(b.dep)} wirklich stornieren?</div>
+      <div class="row end"><button class="btn" type="button" id="noC">Nein, behalten</button><button class="btn danger" type="button" id="yesC">Ja, stornieren</button></div>`;
+    $("#noC").onclick = () => openBooking(id);
+    $("#yesC").onclick = () => {
+      b.cancelled = true; closeOverlay(); render();
+      toast(`Buchung ${b.name} storniert.`, () => { b.cancelled = false; render(); toast("Stornierung zurückgenommen."); });
+    };
+  };
+}
+
+function openTasks() {
+  const items = tasks.length ? tasks.map(t => `<div class="task ${t.done ? "done" : ""}"><span>${esc(t.text)}</span>${t.done ? "<span>Erledigt</span>" : `<button class="btn" type="button" data-done="${t.id}">Erledigt</button>`}</div>`).join("") : `<div class="notice">Keine Nachträge.</div>`;
+  overlay(`<h2>Nachträge</h2><p class="stepinfo">Portale ohne automatischen Abgleich. Bitte dort von Hand eintragen und dann abhaken.</p><div class="list">${items}</div><div class="row end"><button class="btn primary" type="button" id="closeT">Schließen</button></div>`);
+  $("#closeT").onclick = closeOverlay;
+  document.querySelectorAll("[data-done]").forEach(btn => btn.onclick = () => { tasks.find(t => t.id === +btn.dataset.done).done = true; renderTop(); openTasks(); });
+}
+
+/* Neue Buchung */
+function openWizard(pre) {
+  const w = { step: 1, apt: pre.apt || null, arr: pre.arr || null, dep: null, name: "", addr: "", phone: "", guests: 2, price: "", src: null, note: "", cal: pre.arr ? new Date(pre.arr.getFullYear(), pre.arr.getMonth(), 1) : new Date(TODAY.getFullYear(), TODAY.getMonth(), 1) };
+  if (w.apt) w.step = 2;
+  drawWizard(w);
+}
+
+function conflict(w) {
+  if (!w.apt || !w.arr || !w.dep) return null;
+  return bookings.find(b => b.apt === w.apt && !b.cancelled && b.arr < w.dep && b.dep > w.arr) || null;
+}
+
+function drawWizard(w) {
+  const T = 7, a = w.apt ? aptOf(w.apt) : null;
+  let body = "", canNext = true;
+  if (w.step === 1) {
+    body = `<h2>Welche Wohnung?</h2><div class="choices">${APTS.map(x => x.smoobu
+      ? `<button type="button" class="choice" data-apt="${x.id}" aria-pressed="${w.apt === x.id}"><span class="dot" style="background:${x.color}"></span><span>${x.name}<small>${x.nick}</small></span></button>`
+      : `<button type="button" class="choice" disabled style="opacity:.5"><span class="dot" style="background:${x.color}"></span><span>${x.name}<small>dauerhaft vermietet</small></span></button>`).join("")}</div>`;
+    canNext = !!w.apt;
+  } else if (w.step === 2) {
+    const m = w.cal, days = new Date(m.getFullYear(), m.getMonth() + 1, 0).getDate(), lead = (new Date(m.getFullYear(), m.getMonth(), 1).getDay() + 6) % 7;
+    let cells = ["Mo","Di","Mi","Do","Fr","Sa","So"].map(d => `<div class="wd">${d}</div>`).join("") + "<div></div>".repeat(lead);
+    for (let d = 1; d <= days; d++) {
+      const dt = new Date(m.getFullYear(), m.getMonth(), d);
+      const busy = bookings.some(b => b.apt === w.apt && !b.cancelled && b.arr <= dt && b.dep > dt);
+      const sel = (w.arr && same(dt, w.arr)) || (w.dep && same(dt, w.dep));
+      const inR = w.arr && w.dep && dt > w.arr && dt < w.dep;
+      cells += `<button type="button" data-day="${d}" class="${busy ? "busy" : ""} ${sel ? "sel" : ""} ${inR ? "range" : ""}">${d}</button>`;
+    }
+    const c = conflict(w);
+    const info = !w.arr ? "Bitte zuerst den Anreisetag antippen." : !w.dep ? `Anreise ${fl(w.arr)}. Jetzt den Abreisetag antippen.` : `${fl(w.arr)} bis ${fl(w.dep)}: <b>${diff(w.arr, w.dep)} Nächte</b>`;
+    body = `<h2>Wann?</h2>
+      <div class="calhead"><button class="btn" type="button" id="calPrev">◀</button><strong>${MONTHS[m.getMonth()]} ${m.getFullYear()}</strong><button class="btn" type="button" id="calNext">▶</button></div>
+      <div class="cal">${cells}</div>
+      <div class="notice">${info} <span class="stepinfo">Schraffiert = schon belegt.</span></div>
+      ${c ? `<div class="notice warn">Überschneidung mit ${esc(c.name)} (${f(c.arr)} bis ${f(c.dep)}). Bitte andere Tage wählen.</div>` : ""}`;
+    canNext = !!(w.arr && w.dep && !c);
+  } else if (w.step === 3) {
+    body = `<h2>Wer kommt?</h2>
+      <label class="f">Name<input id="fName" value="${esc(w.name)}" placeholder="z. B. Familie Maier" autocomplete="off"></label>
+      <label class="f">Adresse<input id="fAddr" value="${esc(w.addr)}" placeholder="Straße, PLZ Ort" autocomplete="off"></label>
+      <label class="f">Telefon<input id="fPhone" value="${esc(w.phone)}" inputmode="tel" autocomplete="off"></label>
+      <div class="f"><b>Anzahl Reisende</b><div class="stepper"><button type="button" id="gMinus" aria-label="weniger">−</button><output id="gOut">${w.guests}</output><button type="button" id="gPlus" aria-label="mehr">+</button></div></div>`;
+    canNext = w.name.trim().length > 0;
+  } else if (w.step === 4) {
+    body = `<h2>Preis</h2><label class="f">Gesamtpreis in Euro<input id="fPrice" value="${esc(w.price)}" inputmode="decimal" placeholder="z. B. 595"></label><p class="stepinfo">Kann leer bleiben und später ergänzt werden.</p>`;
+  } else if (w.step === 5) {
+    body = `<h2>Woher kam die Buchung?</h2><div class="choices">${SOURCES.map(s => `<button type="button" class="choice" data-src="${esc(s)}" aria-pressed="${w.src === s}">${esc(s)}</button>`).join("")}</div>`;
+    canNext = !!w.src;
+  } else if (w.step === 6) {
+    body = `<h2>Notiz</h2><label class="f">Optional, z. B. „Hund“ oder „kommt spät“<textarea id="fNote" rows="3">${esc(w.note)}</textarea></label>`;
+  } else {
+    body = `<h2>Alles richtig?</h2><p class="big-sentence"><b>${esc(w.name)}</b> (${w.guests} Reisende) wohnt in <b>${a.name} „${a.nick}“</b> von <b>${fl(w.arr)}</b> bis <b>${fl(w.dep)}</b>, ${diff(w.arr, w.dep)} Nächte${w.price ? `, ${esc(w.price)} €` : ""}. Gebucht über ${esc(w.src)}.</p>${w.note ? `<div class="notice">Notiz: ${esc(w.note)}</div>` : ""}`;
+  }
+  overlay(`<div class="stepinfo">Neue Buchung · Schritt ${w.step} von ${T}</div>${body}
+    <div class="row end">
+      <button class="btn" type="button" id="wCancel">Abbrechen</button>
+      ${w.step > 1 ? `<button class="btn" type="button" id="wBack">Zurück</button>` : ""}
+      <button class="btn primary" type="button" id="wNext" ${canNext ? "" : "disabled"}>${w.step === T ? "Eintragen" : "Weiter"}</button>
+    </div>`);
+
+  const keep = () => {
+    if ($("#fName")) { w.name = $("#fName").value; w.addr = $("#fAddr").value; w.phone = $("#fPhone").value; }
+    if ($("#fPrice")) w.price = $("#fPrice").value;
+    if ($("#fNote")) w.note = $("#fNote").value;
+  };
+  $("#wCancel").onclick = closeOverlay;
+  if ($("#wBack")) $("#wBack").onclick = () => { keep(); w.step--; drawWizard(w); };
+  $("#wNext").onclick = () => {
+    keep();
+    if (w.step < T) { w.step++; return drawWizard(w); }
+    const nb = { id: uid++, apt: w.apt, arr: w.arr, dep: w.dep, name: w.name.trim(), src: w.src, guests: w.guests, price: w.price ? Number(String(w.price).replace(",", ".")) : null, phone: w.phone, addr: w.addr, note: w.note };
+    bookings.push(nb);
+    let msg = "Eingetragen.";
+    if (w.src !== "TouristInfo") {
+      tasks.push({ id: Date.now(), text: `Bei TouristInfo nachtragen: ${a.name}, ${f(w.arr)}–${f(w.dep)} blockieren`, done: false });
+      msg = "Eingetragen. Bitte noch bei TouristInfo nachtragen, matze wurde benachrichtigt.";
+    }
+    closeOverlay();
+    state.view = "w4"; state.start = startOfWeek(w.arr); render(); toast(msg);
+  };
+  document.querySelectorAll("[data-apt]").forEach(btn => btn.onclick = () => { w.apt = +btn.dataset.apt; drawWizard(w); });
+  document.querySelectorAll("[data-src]").forEach(btn => btn.onclick = () => { w.src = btn.dataset.src; drawWizard(w); });
+  if ($("#fName")) $("#fName").oninput = () => { w.name = $("#fName").value; $("#wNext").disabled = !w.name.trim(); };
+  if ($("#gMinus")) {
+    $("#gMinus").onclick = () => { w.guests = Math.max(1, w.guests - 1); $("#gOut").textContent = w.guests; };
+    $("#gPlus").onclick = () => { w.guests = Math.min(8, w.guests + 1); $("#gOut").textContent = w.guests; };
+  }
+  if ($("#calPrev")) {
+    $("#calPrev").onclick = () => { w.cal = new Date(w.cal.getFullYear(), w.cal.getMonth() - 1, 1); drawWizard(w); };
+    $("#calNext").onclick = () => { w.cal = new Date(w.cal.getFullYear(), w.cal.getMonth() + 1, 1); drawWizard(w); };
+    document.querySelectorAll("[data-day]").forEach(btn => btn.onclick = () => {
+      const dt = new Date(w.cal.getFullYear(), w.cal.getMonth(), +btn.dataset.day);
+      if (!w.arr || w.dep || dt <= w.arr) { w.arr = dt; w.dep = null; } else w.dep = dt;
+      drawWizard(w);
+    });
+  }
+}
+
+render();
+</script>
