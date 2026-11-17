@@ -73,7 +73,8 @@ Kernentscheidungen:
 - **Lesen:** `GET /api/reservations` (gefiltert nach Zeitraum, inkl. Blockierungen) und `GET /api/apartments` für die Wohnungsliste.
 - **Aktuell halten:** Smoobu-Webhooks (neue/geänderte/stornierte Buchung) lösen sofort ein Nachladen aus. Zusätzlich holt der Server alle 10 Minuten einen Abgleich (`modifiedFrom=…`), falls ein Webhook verloren geht.
 - **Schreiben:**
-  - Anlegen: `POST /api/reservations` (Anreise, Abreise, Wohnung, Gast, Personen, Notiz, Kanal „Direktbuchung“).
+  - Anlegen: `POST /api/reservations` (Anreise, Abreise, Wohnung, Name, Telefon, Reisende, Preis, Notiz, Kanal „Direktbuchung“).
+  - **Gast-Adresse:** In der gelesenen API-Doku ist beim Anlegen kein Adressfeld aufgeführt. In Phase 1 prüfen wir, ob Smoobu die Adresse über die Gästedaten annimmt. Falls nicht, speichert die App die Adresse selbst, verknüpft mit der Smoobu-Buchung.
   - Gast/Notiz/Personen ändern: `PUT /api/reservations/{id}`.
   - Stornieren: `DELETE /api/reservations/{id}` (bleibt in Smoobu als storniert erhalten).
   - **Termin oder Wohnung verschieben:** laut Doku nicht per `PUT` änderbar. Die App macht das intern als „stornieren + neu anlegen“ und zeigt es der Nutzerin als ein einziger Schritt „Verschieben“. (Vor Umsetzung mit Smoobu bestätigen.)
@@ -167,7 +168,7 @@ Gleiches Raster, schmalere Tage, Namen gekürzt. Ziel: freie Lücken für Anfrag
 
 ### 5.5 Buchungskarte (Ansehen)
 
-Groß und vollständig: Gastname, Telefon (antippbar), Anreise, Abreise, Nächte, Personen, Herkunft (Telefon, FeWo-Bodensee, Bodenseeurlaub, TouristInfo, Booking.com …), Notiz. Knöpfe: **Ändern**, **Verschieben**, **Stornieren**. Bei Portal-Buchungen, die nur lesend sind, steht stattdessen „Diese Buchung bitte bei Booking.com ändern“.
+Groß und vollständig: Gastname, Adresse, Telefon (antippbar), Anreise, Abreise, Nächte, Anzahl Reisende, Preis, Herkunft (Telefon, FeWo-Bodensee, Bodenseeurlaub, TouristInfo, Booking.com …), Notiz. Knöpfe: **Ändern**, **Verschieben**, **Stornieren**. Bei Portal-Buchungen, die nur lesend sind, steht stattdessen „Diese Buchung bitte bei Booking.com ändern“.
 
 ### 5.6 Neue Buchung (Schritt für Schritt)
 
@@ -175,10 +176,11 @@ Ein Schritt pro Bildschirm, mit großem „Weiter“:
 
 1. **Welche Wohnung?** (4 große farbige Knöpfe; belegte sind ausgegraut mit Grund)
 2. **Wann?** Anreise und Abreise im großen Monatskalender antippen. Die App zeigt sofort „7 Nächte“ und warnt rot, wenn sich etwas überschneidet.
-3. **Wer?** Name (Pflicht), Telefon, Anzahl Personen.
-4. **Woher kam die Buchung?** Große Knöpfe mit den Kanälen.
-5. **Notiz** (optional, z.B. „Hund“, „kommt spät“).
-6. **Zusammenfassung** in einem Satz + „Eintragen“.
+3. **Wer?** Name (Pflicht), Adresse, Telefon, Anzahl Reisende.
+4. **Preis** (Gesamtpreis in Euro, eine große Zahl).
+5. **Woher kam die Buchung?** Große Knöpfe mit den Kanälen.
+6. **Notiz** (optional, z.B. „Hund“, „kommt spät“).
+7. **Zusammenfassung** in einem Satz + „Eintragen“.
 
 Danach: grüner Haken „Eingetragen“, und falls nötig der Hinweis „Bitte noch bei TouristInfo nachtragen. matze wurde benachrichtigt.“
 
@@ -190,8 +192,8 @@ Danach: grüner Haken „Eingetragen“, und falls nötig der Hinweis „Bitte n
 ## 6. PDF-Export pro Monat
 
 - Knopf „Monat drucken / als PDF“ in jeder Ansicht.
-- A4 quer, eine Seite pro Monat: oben Monatsname, darunter das Raster Wohnungen × Tage mit Gastnamen, unten eine Liste aller Buchungen des Monats (Wohnung, Name, Anreise, Abreise, Personen, Telefon, Notiz).
-- Optional zweite Variante „zum Aushängen“ ohne Telefonnummern und Notizen.
+- A4 quer, eine Seite pro Monat: oben Monatsname, darunter das Raster Wohnungen × Tage mit Gastnamen, unten eine Liste aller Buchungen des Monats (Wohnung, Name, Adresse, Telefon, Anreise, Abreise, Reisende, Preis, Notiz).
+- Optional zweite Variante „zum Aushängen“ ohne Adresse, Telefon, Preis und Notizen.
 - Erzeugt auf dem Server, damit das Ergebnis immer gleich aussieht. Auf dem iPad öffnet sich das PDF zum Drucken (AirPrint), Teilen oder Speichern.
 
 ## 7. Technik-Vorschlag
@@ -219,7 +221,7 @@ Datenschutz: Gastdaten liegen in Smoobu; die App speichert nur einen Zwischenspe
 5. ~~**Fewo 4**~~ – beantwortet: Die Firma nutzt die Wohnung durchgängig. Sie bleibt außerhalb von Smoobu.
 6. ~~**Wer bekommt Nachtrag-Erinnerungen?**~~ – beantwortet: beide, matze und die Schwiegermutter, per Push über ntfy.
 7. ~~**Darf die Schwiegermutter selbst stornieren und verschieben?**~~ – beantwortet: ja, sofern es einfach bedienbar ist. matze bekommt bei jeder Stornierung/Verschiebung eine ntfy-Info.
-8. **Welche Infos stehen heute im Papierkalender** pro Buchung (Name, Telefon, Personen, Preis, Anzahlung, Endreinigung …)? Preise erstmal weglassen?
+8. ~~**Welche Infos stehen im Papierkalender?**~~ – beantwortet: Name, Adresse, Telefonnummer, Preis, Anzahl Reisende.
 9. **Namen und Farben der Wohnungen**, wie sie in der Familie heißen.
 10. **iPad:** Modell / iPadOS-Version, Querformat mit Hülle? Gibt es einen Drucker mit AirPrint?
 11. **Hosting:** Ist ein kleiner Server (ca. 5 €/Monat) okay, oder gibt es schon eine Domain/einen Server?
