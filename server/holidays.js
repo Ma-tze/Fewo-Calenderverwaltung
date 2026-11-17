@@ -26,17 +26,24 @@ export function mapOpenHolidays(list, kind) {
 
 export async function fetchHolidays(store) {
   const y = new Date().getFullYear();
-  const from = `${y - 1}-01-01`, to = `${y + 2}-12-31`;
-  const q = `countryIsoCode=DE&subdivisionCode=${REGION}&languageIsoCode=DE&validFrom=${from}&validTo=${to}`;
+  // Die API erlaubt höchstens 1095 Tage pro Abfrage, daher zwei Abfragen: Vorjahr bis nächstes Jahr, dann übernächstes Jahr.
+  const ranges = [[`${y - 1}-01-01`, `${y + 1}-12-31`], [`${y + 2}-01-01`, `${y + 2}-12-31`]];
   const prev = store.data.holidays || {};
   try {
-    const [school, pub] = await Promise.all([
-      getJson(`${API}/SchoolHolidays?${q}`),
-      getJson(`${API}/PublicHolidays?${q}`),
-    ]);
-    const items = [...mapOpenHolidays(school, 'school'), ...mapOpenHolidays(pub, 'public')];
-    if (!items.length) throw new Error('Keine Daten erhalten');
-    store.data.holidays = { fetchedAt: new Date().toISOString(), error: null, items };
+    const items = [];
+    for (const [from, to] of ranges) {
+      const q = `countryIsoCode=DE&subdivisionCode=${REGION}&languageIsoCode=DE&validFrom=${from}&validTo=${to}`;
+      const [school, pub] = await Promise.all([
+        getJson(`${API}/SchoolHolidays?${q}`),
+        getJson(`${API}/PublicHolidays?${q}`),
+      ]);
+      items.push(...mapOpenHolidays(school, 'school'), ...mapOpenHolidays(pub, 'public'));
+    }
+    // doppelte Einträge (Ferien über den Jahreswechsel) entfernen
+    const seen = new Set();
+    const unique = items.filter(h => { const k = `${h.kind}|${h.start}|${h.end}|${h.name}`; if (seen.has(k)) return false; seen.add(k); return true; });
+    if (!unique.length) throw new Error('Keine Daten erhalten');
+    store.data.holidays = { fetchedAt: new Date().toISOString(), error: null, items: unique };
   } catch (e) {
     store.data.holidays = { ...prev, error: e.message, items: prev.items || [] };
     console.error('Ferien-Abruf fehlgeschlagen:', e.message);
