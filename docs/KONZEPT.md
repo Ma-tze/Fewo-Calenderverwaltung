@@ -20,6 +20,7 @@ Externe Kalender:
 | Kanal | Zugang | Besonderheit |
 |---|---|---|
 | **Smoobu** | API, Webhooks, iCal je Wohnung | Masterkalender für Fewo 1–3 |
+| **Booking.com, Airbnb** | direkt in Smoobu angebunden | Buchungen erscheinen in der App, nur lesend |
 | **ferienwohnungen-bodensee.de** | iCal-Export (`oid=119`) und iCal-Import-Link | **ein** Objekt für alle 3 Wohnungen: „belegt“ nur, wenn alle 3 belegt sind |
 | **bodenseeurlaub.de** | iCal-Export (`oid=68`) und iCal-Import-Link | wie oben, gleiche Software (Joomla `com_fewo`) |
 | **TouristInfo Immenstaad** | Holidu im Hintergrund, eingeschränkter Zugang | Abgleich vermutlich nur von Hand |
@@ -208,7 +209,7 @@ Datenschutz: Gastdaten liegen in Smoobu; die App speichert nur einen Zwischenspe
 ## 8. Offene Fragen an matze
 
 1. **Smoobu-Tarif:** Ist die API im gebuchten Tarif enthalten, und sind Webhooks verfügbar? Gibt es bereits einen API-Schlüssel nach dem neuen HMAC-Verfahren? (Schlüssel bitte nicht hier eintragen, nur Ja/Nein.)
-2. **Kanäle in Smoobu:** Welche Portale sind heute direkt in Smoobu angebunden (Booking.com, Airbnb, …)? Sind die beiden Bodensee-Portale schon irgendwie mit Smoobu verbunden?
+2. ~~**Kanäle in Smoobu**~~ – beantwortet: Booking.com und Airbnb sind angebunden. Die Bodensee-Portale sind nicht mit Smoobu verbunden.
 3. **Portale:** Wie kommen Buchungen über ferienwohnungen-bodensee.de und bodenseeurlaub.de herein (Anfrage per E-Mail, Sofortbuchung)? Werden dort immer alle 3 Wohnungen angeboten?
 4. **TouristInfo Immenstaad:** Was genau sieht man im Zugang? Gibt es einen Menüpunkt „iCal“ oder „Synchronisation“? Wer trägt dort heute nach, und wie kommen von dort Buchungen herein?
 5. **Fewo 4:** Gibt es Zeiträume, in denen die Firma die Wohnung nicht nutzt und sie frei vermietet wird? Soll sie langfristig in Smoobu?
