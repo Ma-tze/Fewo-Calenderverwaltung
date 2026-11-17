@@ -118,7 +118,8 @@ Zwei Wege:
   - Sofort geht eine **Push-Nachricht über ntfy an matze und die Schwiegermutter** (je ein eigenes, nicht erratbares Thema), mit direktem Link ins Holidu-/TouristInfo-Portal. E-Mail dient als Rückfall.
   - In der App gibt es oben ein kleines Feld „2 Nachträge offen“. Ein Tipp auf „Erledigt“ hakt es ab.
   - Bleibt eine Aufgabe 24 Stunden offen, kommt eine zweite Erinnerung.
-  - Umgekehrt: Buchungen, die über die TouristInfo hereinkommen (vermutlich per E-Mail), trägt man in der App mit Herkunft „TouristInfo“ ein. Dann entsteht natürlich keine Nachtrag-Aufgabe für Holidu.
+  - Da über die TouristInfo nur **Anfragen** kommen (bestätigt), entsteht auch dort keine echte Doppelbuchung. Der Nachtrag sorgt dafür, dass Gäste dort keine belegten Zeiträume anfragen.
+  - Umgekehrt: Buchungen, die nach einer Anfrage über die TouristInfo zustande kommen, trägt man in der App mit Herkunft „TouristInfo“ ein. Dann entsteht natürlich keine Nachtrag-Aufgabe für Holidu.
 
 Dasselbe Nachtrag-Prinzip lässt sich für jeden weiteren Kanal ohne Schnittstelle einschalten (pro Kanal ein Schalter „Nachtrag nötig: ja/nein“).
 
@@ -206,7 +207,7 @@ Danach: grüner Haken „Eingetragen“, und falls nötig der Hinweis „Bitte n
 | Datenbank | **SQLite** | reicht für 4 Wohnungen dauerhaft, eine Datei, leicht zu sichern |
 | PDF | serverseitig HTML → PDF (Playwright/Chromium) | exakt gleiches Layout wie die Ansicht |
 | Benachrichtigung | **ntfy** (Push aufs Handy/iPad über die ntfy-App, Dienst ntfy.sh oder selbst betrieben) + E-Mail als Rückfall | gewünscht von matze; der Server schickt nur eine einfache HTTP-Nachricht, ohne eigenes App-Store-Konto |
-| Hosting | **Start auf matzes Homeserver („homesrv“)** als Docker-Container; von außen erreichbar über einen **Cloudflare Tunnel** (kostenlos, HTTPS, keine Portfreigabe am Router). Später bei Bedarf Umzug auf einen kleinen VPS in Deutschland (ca. 4–5 €/Monat), ohne Code-Änderung | Smoobu-Webhooks, die Portale (Sammel-iCal) und das iPad bei der Schwiegermutter müssen den Server aus dem Internet erreichen |
+| Hosting | **Start auf matzes Homeserver („homesrv“)** als Docker-Container; Debian + Docker vorhanden; von außen erreichbar unter einer Subdomain von matzes eigener Domain (z.B. `kalender.<domain>`) über einen **Cloudflare Tunnel** (kostenlos, HTTPS, keine Portfreigabe am Router). Später bei Bedarf Umzug auf einen kleinen VPS in Deutschland (ca. 4–5 €/Monat), ohne Code-Änderung | Smoobu-Webhooks, die Portale (Sammel-iCal) und das iPad bei der Schwiegermutter müssen den Server aus dem Internet erreichen |
 | Backup | tägliche Kopie der SQLite-Datei | Smoobu hält ohnehin die Hauptdaten |
 
 Hinweise zum Homeserver: Fällt der Strom oder das Internet zu Hause aus, sieht das iPad den letzten Stand und Eintragen ist kurz gesperrt. Smoobu-Daten gehen dabei nicht verloren, weil der Server nach dem Neustart per Abgleich nachholt. Die Portale behalten den zuletzt abgerufenen Sammel-Feed.
@@ -217,17 +218,17 @@ Datenschutz: Gastdaten liegen in Smoobu; die App speichert nur einen Zwischenspe
 
 ## 8. Offene Fragen an matze
 
-1. **Smoobu-Tarif:** Ist die API im gebuchten Tarif enthalten, und sind Webhooks verfügbar? Gibt es bereits einen API-Schlüssel nach dem neuen HMAC-Verfahren? (Schlüssel bitte nicht hier eintragen, nur Ja/Nein.)
+1. **Smoobu-Tarif:** Ist die API im gebuchten Tarif enthalten, und sind Webhooks verfügbar? Gibt es einen API-Schlüssel nach dem neuen HMAC-Verfahren? → **matze prüft das.** (Schlüssel nie hier eintragen.) Ohne API greift die Rückfallvariante aus 4.1.
 2. ~~**Kanäle in Smoobu**~~ – beantwortet: Booking.com und Airbnb sind angebunden. Die Bodensee-Portale sind nicht mit Smoobu verbunden.
-3. **Portale:** teilweise beantwortet: Buchungen kommen nur als Anfrage per E-Mail, eine Direktbuchung gibt es nicht. Noch offen: Werden dort immer alle 3 Wohnungen angeboten?
-4. **TouristInfo Immenstaad:** teilweise beantwortet: Heute gibt es kein iCal. Ein neues System kommt voraussichtlich Anfang Dezember 2026, danach prüfen wir es erneut. Noch offen: Wer trägt dort heute nach, und wie kommen von dort Buchungen herein?
+3. ~~**Portale**~~ – beantwortet: Buchungen kommen nur als Anfrage per E-Mail. Beide Portale bieten immer alle 3 Wohnungen als einen Eintrag an; „frei“, solange mindestens eine Wohnung frei ist.
+4. ~~**TouristInfo Immenstaad**~~ – beantwortet: kein iCal (neues System ca. Anfang Dezember 2026, dann neu prüfen). Über die TouristInfo kommen nur Anfragen, keine Direktbuchungen.
 5. ~~**Fewo 4**~~ – beantwortet: Die Firma nutzt die Wohnung durchgängig. Sie bleibt außerhalb von Smoobu.
 6. ~~**Wer bekommt Nachtrag-Erinnerungen?**~~ – beantwortet: beide, matze und die Schwiegermutter, per Push über ntfy.
 7. ~~**Darf die Schwiegermutter selbst stornieren und verschieben?**~~ – beantwortet: ja, sofern es einfach bedienbar ist. matze bekommt bei jeder Stornierung/Verschiebung eine ntfy-Info.
 8. ~~**Welche Infos stehen im Papierkalender?**~~ – beantwortet: Name, Adresse, Telefonnummer, Preis, Anzahl Reisende.
 9. ~~**Namen und Farben der Wohnungen**~~ – beantwortet: konfigurierbar in den Einstellungen (Verwaltung).
 10. ~~**iPad / Drucker**~~ – beantwortet: normales iPad, ca. 3 Jahre alt (aktuelles iPadOS, PWA-tauglich). Gedruckt wird vom PC aus.
-11. **Hosting:** teilweise beantwortet: Zum Ausprobieren läuft alles auf matzes Homeserver („homesrv“). Noch offen: Welches Betriebssystem/welche Hardware, läuft Docker, gibt es eine eigene Domain?
+11. ~~**Hosting**~~ – beantwortet: matzes Homeserver („homesrv“) mit Debian und Docker; eine eigene Domain ist vorhanden.
 12. ~~**Altdaten**~~ – beantwortet: Alle bestehenden Buchungen sind bereits in Smoobu und erscheinen ab Phase 1 automatisch in der App. Ein Import ist nicht nötig.
 
 ## 9. Phasenplan
