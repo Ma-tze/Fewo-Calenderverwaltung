@@ -62,7 +62,7 @@ Nutzerin: die Schwiegermutter, iPad, bisher Papierkalender. Daraus folgt für al
 Kernentscheidungen:
 
 1. **Smoobu bleibt der Master für Fewo 1–3.** Die App speichert Buchungen für diese Wohnungen nicht selbst, sondern schreibt sie über die Smoobu-API dorthin und liest sie von dort. So bleibt Smoobu mit seinen Kanälen konsistent, und nichts wird doppelt gepflegt.
-2. **Fewo 4 lebt in der App-eigenen Datenbank.** Sie hat keine Portale, also braucht sie kein Smoobu (spart ggf. Smoobu-Kosten pro Wohnung). Typisch ist ein langer Balken „Firma XY“ mit Ausnahmen (Zeiträume, in denen die Firma die Wohnung nicht nutzt).
+2. **Fewo 4 lebt in der App-eigenen Datenbank.** Sie hat keine Portale, also braucht sie kein Smoobu (spart ggf. Smoobu-Kosten pro Wohnung). Sie wird durchgängig von der Firma genutzt und erscheint als ein durchgehender Balken.
 3. **Ein Backend ist Pflicht.** Die Smoobu-API lässt sich laut Doku nicht direkt aus dem Browser aufrufen (CORS), und der API-Schlüssel darf nicht aufs iPad. Außerdem muss irgendwer den Sammel-iCal-Feed ausliefern und Webhooks empfangen.
 4. **Die App ist eine Web-App (PWA)**, die auf dem iPad als Symbol auf dem Home-Bildschirm liegt und sich wie eine App öffnet. Kein App Store, keine Updates auf dem iPad nötig.
 
