@@ -133,7 +133,7 @@ Dasselbe Nachtrag-Prinzip lässt sich für jeden weiteren Kanal ohne Schnittstel
 ### 5.1 Gestaltungsregeln
 
 - iPad im **Querformat**, Schrift mindestens 20 pt, Tipp-Flächen mindestens 48 × 48 pt.
-- **Jede Wohnung hat eine feste Farbe und einen festen Namen**, so wie sie in der Familie genannt wird (z.B. „Seeblick“, „Garten“). Nie Smoobu-IDs.
+- **Jede Wohnung hat eine feste Farbe und einen festen Namen**, so wie sie in der Familie genannt wird (z.B. „Seeblick“, „Garten“). Nie Smoobu-IDs. Name, Farbe und Reihenfolge sind in den Einstellungen **konfigurierbar** (Auswahl aus einer Palette gut unterscheidbarer, kontraststarker Farben).
 - Unten immer dieselbe Leiste: **Heute · 4 Wochen · 3 Monate · Jahr · Neue Buchung**.
 - Keine Wisch-Gesten als einzige Möglichkeit, immer auch große Pfeil-Knöpfe „◀ früher“ / „später ▶“.
 - Kein Löschen ohne Rückfrage in Klartext („Buchung Familie Maier vom 12. bis 19. Juli wirklich stornieren?“), und danach 10 Sekunden „Rückgängig“.
@@ -222,7 +222,7 @@ Datenschutz: Gastdaten liegen in Smoobu; die App speichert nur einen Zwischenspe
 6. ~~**Wer bekommt Nachtrag-Erinnerungen?**~~ – beantwortet: beide, matze und die Schwiegermutter, per Push über ntfy.
 7. ~~**Darf die Schwiegermutter selbst stornieren und verschieben?**~~ – beantwortet: ja, sofern es einfach bedienbar ist. matze bekommt bei jeder Stornierung/Verschiebung eine ntfy-Info.
 8. ~~**Welche Infos stehen im Papierkalender?**~~ – beantwortet: Name, Adresse, Telefonnummer, Preis, Anzahl Reisende.
-9. **Namen und Farben der Wohnungen**, wie sie in der Familie heißen.
+9. ~~**Namen und Farben der Wohnungen**~~ – beantwortet: konfigurierbar in den Einstellungen (Verwaltung).
 10. **iPad:** Modell / iPadOS-Version, Querformat mit Hülle? Gibt es einen Drucker mit AirPrint?
 11. **Hosting:** Ist ein kleiner Server (ca. 5 €/Monat) okay, oder gibt es schon eine Domain/einen Server?
 12. **Altdaten:** Sollen bestehende Einträge aus dem Papierkalender übernommen werden (z.B. einmalig abtippen in Smoobu)?
