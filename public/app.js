@@ -534,6 +534,13 @@
   document.addEventListener('keydown', e => { if (e.key === 'Escape') closeOverlay(); });
   $('#prevBtn').onclick = () => step(-1);
   $('#nextBtn').onclick = () => step(1);
+  const pm = $('#pdfMonth');
+  if (pm) {
+    const t = new Date(); pm.value = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}`;
+    const open = k => { if (!/^\d{4}-\d{2}$/.test(pm.value)) return toast('Bitte einen Monat wählen.'); window.open(`/export/monat.pdf?m=${pm.value}${k ? '' : '&kontakt=0'}`, '_blank'); };
+    $('#pdfBtn').onclick = () => open(true);
+    $('#pdfBtn2').onclick = () => open(false);
+  }
   $('#setBtn').onclick = () => { state.view = state.view === 'settings' ? 'w4' : 'settings'; render(); window.scrollTo(0, 0); };
 
   load();

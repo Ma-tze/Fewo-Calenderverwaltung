@@ -13,6 +13,7 @@ import { Store } from './store.js';
 import { parseICS, buildICS, parsePastedPlan, parsePlanText, isValidDay, addDays } from './ical.js';
 import { execFile } from 'node:child_process';
 import os from 'node:os';
+import { monthPdf } from './report.js';
 import { fetchHolidays, expandSeasons, copySeasons } from './holidays.js';
 import { smoobuConfigured, smoobuAuthMode, listApartments as smoobuApartments, fetchReservations } from './smoobu.js';
 
@@ -234,6 +235,13 @@ async function handle(req, res, mode) {
 
   if (p === '/api/info') return send(res, 200, { mode });
   if (p === '/api/calendar' && req.method === 'GET') return send(res, 200, calendarPayload());
+  const pdfm = p === '/export/monat.pdf' && req.method === 'GET';
+  if (pdfm) {
+    const ym = url.searchParams.get('m') || new Date().toISOString().slice(0, 7);
+    if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(ym)) return send(res, 400, 'Monat bitte als JJJJ-MM angeben.', 'text/plain; charset=utf-8');
+    const { buffer, filename } = monthPdf(calendarPayload(), ym, { contacts: url.searchParams.get('kontakt') !== '0' });
+    return send(res, 200, buffer, 'application/pdf', { 'Content-Disposition': `inline; filename="${filename}"` });
+  }
 
   if (p.startsWith('/api/admin/')) {
     if (mode !== 'admin') return send(res, 403, { error: 'Nur über die PC-Ansicht möglich.' });
