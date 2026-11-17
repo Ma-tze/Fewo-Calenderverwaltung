@@ -79,6 +79,12 @@ Kernentscheidungen:
 - **Buchungen von Booking.com/Airbnb o.ä.** (falls in Smoobu angebunden) werden in der App angezeigt, aber **nur lesend**. Änderungen daran gehören ins jeweilige Portal.
 - **Authentifizierung:** Smoobu hat den alten `Api-Key`-Header laut Doku zum 31.10.2026 abgeschaltet; neu ist ein HMAC-Verfahren (Schlüssel + Signatur je Anfrage). Das macht ausschließlich der Server. Der Schlüssel wird in Smoobu unter *Einstellungen → Erweitert → API-Schlüssel* erzeugt und **nur auf dem Server** hinterlegt, nie im Repository.
 
+**Rückfallvariante ohne API (nur iCal):** Die iCal-Links, die Smoobu pro Wohnung anbietet, sind reine Export-Feeds und nur zum Lesen da. Über diesen Link kann man keine Buchung zu Smoobu schicken. Smoobu kann aber pro Wohnung zusätzlich einen *fremden* iCal-Kalender importieren. Falls die API nicht nutzbar ist, ginge es so:
+- Lesen: Die App liest die drei Smoobu-Export-Feeds. Dabei kommen nur Zeiträume und je nach Einstellung ein kurzer Titel an, keine Telefonnummer und keine Personenzahl.
+- Schreiben: Die App stellt pro Wohnung einen eigenen Feed mit ihren Buchungen bereit. Smoobu importiert ihn und blockiert die Tage.
+- Nachteile: In Smoobu erscheinen die Buchungen nur als „blockiert“ ohne Gastdaten. Der Abgleich ist verzögert, weil Smoobu Fremd-Feeds periodisch abruft. Gastdaten müssten in der App selbst gespeichert werden, und Smoobu ist dann nicht mehr der vollständige Master.
+- Fazit: Das taugt für den Anfang oder als Notlösung. Die API-Variante bleibt die Empfehlung.
+
 ### 4.2 ferienwohnungen-bodensee.de und bodenseeurlaub.de
 
 Das Problem: Beide Portale führen die drei Wohnungen als **ein** Objekt. Ein Smoobu-Export pro Wohnung passt deshalb nicht: Würde man den Feed von Fewo 1 importieren, wäre das ganze Objekt belegt, obwohl Fewo 2 und 3 noch frei sind.
