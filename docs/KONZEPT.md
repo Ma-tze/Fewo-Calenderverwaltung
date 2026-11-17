@@ -1,6 +1,6 @@
 # Konzept: Fewo-Kalender für das iPad
 
-Stand: 17.11.2026 · Status: Entwurf zur Abstimmung (noch kein Code)
+Stand: 17.11.2026 · Nummerierung: Fewo 1 = Firmenwohnung, Fewo 2–4 = vermarktete Wohnungen · Status: Entwurf zur Abstimmung (noch kein Code)
 
 ## 1. Ziel in einem Satz
 
@@ -10,16 +10,16 @@ Eine sehr einfache Kalender-App für das iPad, mit der die Belegung aller vier F
 
 | Wohnung | Vermarktung | In Smoobu? |
 |---|---|---|
-| Fewo 1 | eigene Vermarktung, Portale | ja |
+| Fewo 1 | Langzeitmiete durch eine Firma (durchgängig) | nein |
 | Fewo 2 | eigene Vermarktung, Portale | ja |
 | Fewo 3 | eigene Vermarktung, Portale | ja |
-| Fewo 4 | Langzeitmiete durch eine Firma | nein |
+| Fewo 4 | eigene Vermarktung, Portale | ja |
 
 Externe Kalender:
 
 | Kanal | Zugang | Besonderheit |
 |---|---|---|
-| **Smoobu** | API, Webhooks, iCal je Wohnung | Masterkalender für Fewo 1–3 |
+| **Smoobu** | API, Webhooks, iCal je Wohnung | Masterkalender für Fewo 2–4 |
 | **Booking.com, Airbnb** | direkt in Smoobu angebunden | Buchungen erscheinen in der App, nur lesend |
 | **ferienwohnungen-bodensee.de** | iCal-Export (`oid=119`) und iCal-Import-Link | **ein** Objekt für alle 3 Wohnungen: „belegt“ nur, wenn alle 3 belegt sind |
 | **bodenseeurlaub.de** | iCal-Export (`oid=68`) und iCal-Import-Link | wie oben, gleiche Software (Joomla `com_fewo`) |
@@ -41,7 +41,7 @@ Nutzerin: die Schwiegermutter, iPad, bisher Papierkalender. Daraus folgt für al
                 ┌──────────────▼───────────────┐
                 │  Kleiner Server (Backend)    │
                 │  • Smoobu-API-Anbindung      │
-                │  • eigene DB (Fewo 4, Notizen,│
+                │  • eigene DB (Fewo 1, Notizen,│
                 │    Nachtrag-Aufgaben, Cache) │
                 │  • Sammel-iCal für Portale   │
                 │  • Benachrichtigungen        │
@@ -61,14 +61,14 @@ Nutzerin: die Schwiegermutter, iPad, bisher Papierkalender. Daraus folgt für al
 
 Kernentscheidungen:
 
-1. **Smoobu bleibt der Master für Fewo 1–3.** Die App speichert Buchungen für diese Wohnungen nicht selbst, sondern schreibt sie über die Smoobu-API dorthin und liest sie von dort. So bleibt Smoobu mit seinen Kanälen konsistent, und nichts wird doppelt gepflegt.
-2. **Fewo 4 lebt in der App-eigenen Datenbank.** Sie hat keine Portale, also braucht sie kein Smoobu (spart ggf. Smoobu-Kosten pro Wohnung). Sie wird durchgängig von der Firma genutzt und erscheint als ein durchgehender Balken.
+1. **Smoobu bleibt der Master für Fewo 2–4.** Die App speichert Buchungen für diese Wohnungen nicht selbst, sondern schreibt sie über die Smoobu-API dorthin und liest sie von dort. So bleibt Smoobu mit seinen Kanälen konsistent, und nichts wird doppelt gepflegt.
+2. **Fewo 1 lebt in der App-eigenen Datenbank.** Sie hat keine Portale, also braucht sie kein Smoobu (spart ggf. Smoobu-Kosten pro Wohnung). Sie wird durchgängig von der Firma genutzt und erscheint als ein durchgehender Balken.
 3. **Ein Backend ist Pflicht.** Die Smoobu-API lässt sich laut Doku nicht direkt aus dem Browser aufrufen (CORS), und der API-Schlüssel darf nicht aufs iPad. Außerdem muss irgendwer den Sammel-iCal-Feed ausliefern und Webhooks empfangen.
 4. **Die App ist eine Web-App (PWA)**, die auf dem iPad als Symbol auf dem Home-Bildschirm liegt und sich wie eine App öffnet. Kein App Store, keine Updates auf dem iPad nötig.
 
 ## 4. Datenflüsse je Kanal
 
-### 4.1 Smoobu (Fewo 1–3)
+### 4.1 Smoobu (Fewo 2–4)
 
 - **Lesen:** `GET /api/reservations` (gefiltert nach Zeitraum, inkl. Blockierungen) und `GET /api/apartments` für die Wohnungsliste.
 - **Aktuell halten:** Smoobu-Webhooks (neue/geänderte/stornierte Buchung) lösen sofort ein Nachladen aus. Zusätzlich holt der Server alle 10 Minuten einen Abgleich (`modifiedFrom=…`), falls ein Webhook verloren geht.
@@ -89,7 +89,7 @@ Kernentscheidungen:
 
 ### 4.2 ferienwohnungen-bodensee.de und bodenseeurlaub.de
 
-Das Problem: Beide Portale führen die drei Wohnungen als **ein** Objekt. Ein Smoobu-Export pro Wohnung passt deshalb nicht: Würde man den Feed von Fewo 1 importieren, wäre das ganze Objekt belegt, obwohl Fewo 2 und 3 noch frei sind.
+Das Problem: Beide Portale führen die drei Wohnungen als **ein** Objekt. Ein Smoobu-Export pro Wohnung passt deshalb nicht: Würde man den Feed von Fewo 2 importieren, wäre das ganze Objekt belegt, obwohl Fewo 3 und 4 noch frei sind.
 
 Die Lösung: **ein Sammel-Feed, den die App selbst erzeugt.**
 
@@ -114,7 +114,7 @@ Zwei Wege:
 
 - **Weg A (wenn iCal geht):** pro Wohnung den Smoobu-iCal-Export bei Holidu importieren und den Holidu-Export in Smoobu importieren. Dann ist das automatisch.
 - **Weg B (Standard, falls nicht):** **Nachtrag-Liste mit Erinnerung.**
-  - Jede neue, verschobene oder stornierte Buchung erzeugt automatisch eine Aufgabe „Bei TouristInfo Immenstaad nachtragen: Fewo 2, 12.–19.7. blockieren“.
+  - Jede neue, verschobene oder stornierte Buchung erzeugt automatisch eine Aufgabe „Bei TouristInfo Immenstaad nachtragen: Fewo 3, 12.–19.7. blockieren“.
   - Sofort geht eine **Push-Nachricht über ntfy an matze und die Schwiegermutter** (je ein eigenes, nicht erratbares Thema), mit direktem Link ins Holidu-/TouristInfo-Portal. E-Mail dient als Rückfall.
   - In der App gibt es oben ein kleines Feld „2 Nachträge offen“. Ein Tipp auf „Erledigt“ hakt es ab.
   - Bleibt eine Aufgabe 24 Stunden offen, kommt eine zweite Erinnerung.
@@ -123,11 +123,11 @@ Zwei Wege:
 
 Dasselbe Nachtrag-Prinzip lässt sich für jeden weiteren Kanal ohne Schnittstelle einschalten (pro Kanal ein Schalter „Nachtrag nötig: ja/nein“).
 
-### 4.4 Fewo 4 (Firma)
+### 4.4 Fewo 1 (Firma)
 
 - Wird laut matze **durchgängig** von der Firma genutzt (bestätigt 17.11.2026). Sie bleibt deshalb außerhalb von Smoobu.
 - In der App ist sie eine eigene Zeile mit einem durchgehenden Balken „Dauermiete Firma XY“, eingetragen in der App-eigenen Datenbank. Im Alltag gibt es dort nichts zu pflegen.
-- Wird die Wohnung irgendwann doch frei vermietet, kann sie in Smoobu aufgenommen werden, und die App behandelt sie dann wie Fewo 1–3.
+- Wird die Wohnung irgendwann doch frei vermietet, kann sie in Smoobu aufgenommen werden, und die App behandelt sie dann wie Fewo 2–4.
 
 ## 5. Bedienkonzept für das iPad
 
@@ -148,10 +148,10 @@ Wie ein Belegungsplan: Zeilen = Wohnungen, Spalten = Tage, Buchungen als farbige
 
 ```
             Mo 17  Di 18  Mi 19  Do 20  Fr 21  Sa 22  So 23  Mo 24 …
+Firma       [ Dauermiete Firma XY ─────────────────────────────
 Seeblick    [ Maier ──────────────────]      [ Huber ─────────
 Garten            [ Schmidt ──────────────────────────]
 Wiese       ·  frei  ·  frei  ·  frei  · [ Weber ───────]
-Firma       [ Dauermiete Firma XY ─────────────────────────────
 ```
 
 - Heute ist deutlich markiert.
@@ -214,7 +214,7 @@ Hinweise zum Homeserver: Fällt der Strom oder das Internet zu Hause aus, sieht 
 
 Weitere Alternativen: Serverless (Cloudflare Workers + D1) ist günstiger, macht aber die PDF-Erzeugung umständlicher. Ein Raspberry Pi zu Hause ginge auch, braucht aber eine von außen erreichbare Adresse.
 
-Datenschutz: Gastdaten liegen in Smoobu; die App speichert nur einen Zwischenspeicher, Fewo-4-Einträge, Notizen und das Änderungsprotokoll. Zugriff nur mit Anmeldung, iCal-Feed nur mit geheimem Token und **ohne** Gastnamen (nur „belegt“).
+Datenschutz: Gastdaten liegen in Smoobu; die App speichert nur einen Zwischenspeicher, Fewo-1-Einträge, Notizen und das Änderungsprotokoll. Zugriff nur mit Anmeldung, iCal-Feed nur mit geheimem Token und **ohne** Gastnamen (nur „belegt“).
 
 ## 8. Offene Fragen an matze
 
@@ -222,7 +222,7 @@ Datenschutz: Gastdaten liegen in Smoobu; die App speichert nur einen Zwischenspe
 2. ~~**Kanäle in Smoobu**~~ – beantwortet: Booking.com und Airbnb sind angebunden. Die Bodensee-Portale sind nicht mit Smoobu verbunden.
 3. ~~**Portale**~~ – beantwortet: Buchungen kommen nur als Anfrage per E-Mail. Beide Portale bieten immer alle 3 Wohnungen als einen Eintrag an; „frei“, solange mindestens eine Wohnung frei ist.
 4. ~~**TouristInfo Immenstaad**~~ – beantwortet: kein iCal (neues System ca. Anfang Dezember 2026, dann neu prüfen). Über die TouristInfo kommen nur Anfragen, keine Direktbuchungen.
-5. ~~**Fewo 4**~~ – beantwortet: Die Firma nutzt die Wohnung durchgängig. Sie bleibt außerhalb von Smoobu.
+5. ~~**Fewo 1**~~ – beantwortet: Die Firma nutzt die Wohnung durchgängig. Sie bleibt außerhalb von Smoobu.
 6. ~~**Wer bekommt Nachtrag-Erinnerungen?**~~ – beantwortet: beide, matze und die Schwiegermutter, per Push über ntfy.
 7. ~~**Darf die Schwiegermutter selbst stornieren und verschieben?**~~ – beantwortet: ja, sofern es einfach bedienbar ist. matze bekommt bei jeder Stornierung/Verschiebung eine ntfy-Info.
 8. ~~**Welche Infos stehen im Papierkalender?**~~ – beantwortet: Name, Adresse, Telefonnummer, Preis, Anzahl Reisende.
@@ -236,7 +236,7 @@ Datenschutz: Gastdaten liegen in Smoobu; die App speichert nur einen Zwischenspe
 | Phase | Inhalt | Ergebnis |
 |---|---|---|
 | **0 – Klären** | offene Fragen beantworten, TouristInfo nach iCal fragen, Smoobu-API-Zugang prüfen | Entscheidungen fix |
-| **1 – Anzeige (iCal)** | Server auf homesrv liest die **Smoobu-iCal-Export-Feeds** der 3 Wohnungen (alle 10–15 Min.), Fewo 4 als fester Balken, 4-Wochen-Ansicht, Installation aufs iPad. **Keine API, kein Eintragen.** | Schwiegermutter kann die Belegung sehen, parallel zum Papierkalender (Entscheidung matze, 17.11.2026) |
+| **1 – Anzeige (iCal)** | Server auf homesrv liest die **Smoobu-iCal-Export-Feeds** der 3 Wohnungen (alle 10–15 Min.), Fewo 1 als fester Balken, 4-Wochen-Ansicht, Installation aufs iPad. **Keine API, kein Eintragen.** | Schwiegermutter kann die Belegung sehen, parallel zum Papierkalender (Entscheidung matze, 17.11.2026) |
 | **2 – Eintragen** (ab hier API nötig) | Neue Buchung, Ändern, Verschieben, Stornieren über Smoobu; Änderungsprotokoll | Papierkalender wird überflüssig |
 | **3 – Portale** | Sammel-iCal-Feed für beide Bodensee-Portale, Kontrolle der Portal-Feeds, Nachtrag-Liste + E-Mail für TouristInfo | Doppelbuchungen werden praktisch ausgeschlossen |
 | **4 – Planung & Druck** | 3-Monats- und Jahresansicht, PDF-Monatsexport | vollständiger Funktionsumfang |
