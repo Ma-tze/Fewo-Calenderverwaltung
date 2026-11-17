@@ -228,7 +228,7 @@ Datenschutz: Gastdaten liegen in Smoobu; die App speichert nur einen Zwischenspe
 9. ~~**Namen und Farben der Wohnungen**~~ – beantwortet: konfigurierbar in den Einstellungen (Verwaltung).
 10. ~~**iPad / Drucker**~~ – beantwortet: normales iPad, ca. 3 Jahre alt (aktuelles iPadOS, PWA-tauglich). Gedruckt wird vom PC aus.
 11. **Hosting:** teilweise beantwortet: Zum Ausprobieren läuft alles auf matzes Homeserver („homesrv“). Noch offen: Welches Betriebssystem/welche Hardware, läuft Docker, gibt es eine eigene Domain?
-12. **Altdaten:** Sollen bestehende Einträge aus dem Papierkalender übernommen werden (z.B. einmalig abtippen in Smoobu)?
+12. ~~**Altdaten**~~ – beantwortet: Alle bestehenden Buchungen sind bereits in Smoobu und erscheinen ab Phase 1 automatisch in der App. Ein Import ist nicht nötig.
 
 ## 9. Phasenplan
 
