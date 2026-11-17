@@ -194,7 +194,8 @@ Danach: grüner Haken „Eingetragen“, und falls nötig der Hinweis „Bitte n
 - Knopf „Monat drucken / als PDF“ in jeder Ansicht.
 - A4 quer, eine Seite pro Monat: oben Monatsname, darunter das Raster Wohnungen × Tage mit Gastnamen, unten eine Liste aller Buchungen des Monats (Wohnung, Name, Adresse, Telefon, Anreise, Abreise, Reisende, Preis, Notiz).
 - Optional zweite Variante „zum Aushängen“ ohne Adresse, Telefon, Preis und Notizen.
-- Erzeugt auf dem Server, damit das Ergebnis immer gleich aussieht. Auf dem iPad öffnet sich das PDF zum Drucken (AirPrint), Teilen oder Speichern.
+- Erzeugt auf dem Server, damit das Ergebnis immer gleich aussieht.
+- **Gedruckt wird vom PC aus** (bestätigt): Die App läuft auch im PC-Browser, dort gibt es den Knopf „Monat als PDF“. Auf dem iPad kann das PDF zusätzlich angesehen oder geteilt werden, ein AirPrint-Drucker ist nicht nötig.
 
 ## 7. Technik-Vorschlag
 
@@ -223,7 +224,7 @@ Datenschutz: Gastdaten liegen in Smoobu; die App speichert nur einen Zwischenspe
 7. ~~**Darf die Schwiegermutter selbst stornieren und verschieben?**~~ – beantwortet: ja, sofern es einfach bedienbar ist. matze bekommt bei jeder Stornierung/Verschiebung eine ntfy-Info.
 8. ~~**Welche Infos stehen im Papierkalender?**~~ – beantwortet: Name, Adresse, Telefonnummer, Preis, Anzahl Reisende.
 9. ~~**Namen und Farben der Wohnungen**~~ – beantwortet: konfigurierbar in den Einstellungen (Verwaltung).
-10. **iPad:** Modell / iPadOS-Version, Querformat mit Hülle? Gibt es einen Drucker mit AirPrint?
+10. ~~**iPad / Drucker**~~ – beantwortet: normales iPad, ca. 3 Jahre alt (aktuelles iPadOS, PWA-tauglich). Gedruckt wird vom PC aus.
 11. **Hosting:** Ist ein kleiner Server (ca. 5 €/Monat) okay, oder gibt es schon eine Domain/einen Server?
 12. **Altdaten:** Sollen bestehende Einträge aus dem Papierkalender übernommen werden (z.B. einmalig abtippen in Smoobu)?
 
