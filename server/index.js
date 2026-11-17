@@ -51,12 +51,15 @@ async function fetchApartment(apt) {
 
 /* ---------- Smoobu-API-Abruf (alle Wohnungen mit Quelle "smoobu" in einem Durchgang) ---------- */
 
+let lastSmoobuCount = -1;
 async function fetchSmoobu() {
   const apts = store.data.apartments.filter(a => a.source === 'smoobu' && a.smoobuId);
   if (!apts.length) return;
   const y = new Date().getFullYear();
   try {
     const all = await fetchReservations(`${y - 1}-01-01`, `${y + 2}-12-31`);
+    if (all.length !== lastSmoobuCount) console.log(`Smoobu-API: ${all.length} Buchungen abgerufen.`);
+    lastSmoobuCount = all.length;
     const now = new Date().toISOString();
     for (const a of apts) {
       const events = all.filter(b => String(b.aptId) === String(a.smoobuId)).map(b => ({
@@ -82,7 +85,9 @@ function applyFallback() {
     const bk = store.data.backup?.[a.id];
     const apiOk = smoobuConfigured() && a.smoobuId && c.fetchedAt && !c.error;
     if (apiOk || !a.icalUrl || !bk?.fetchedAt || bk.error) continue;
-    store.data.cache[a.id] = { ...c, events: bk.events, fallback: true, fallbackAt: bk.fetchedAt };
+    const why = !smoobuConfigured() ? 'kein API-Zugang in .env' : !a.smoobuId ? 'keine Smoobu-Wohnung zugeordnet' : c.error || 'noch kein API-Abruf';
+    if (!c.fallback || c.fallbackWhy !== why) console.log(`${a.name}: Smoobu-API nicht nutzbar (${why}), zeige iCal-Stand.`);
+    store.data.cache[a.id] = { ...c, events: bk.events, fallback: true, fallbackAt: bk.fetchedAt, fallbackWhy: why };
   }
 }
 
@@ -113,7 +118,7 @@ function calendarPayload() {
   const apartments = store.data.apartments.map(a => {
     const c = store.data.cache[a.id] || {};
     return { id: a.id, name: a.name, nick: a.nick, color: a.color, source: a.source,
-      configured: isConfigured(a), fetchedAt: a.source === 'own' ? null : (c.fallback ? c.fallbackAt : c.fetchedAt) || null, error: a.source === 'own' || c.fallback ? null : c.error || null };
+      configured: isConfigured(a), via: a.source === 'own' ? 'own' : a.source === 'ical' ? 'ical' : c.fallback ? 'ical-ersatz' : 'api', fetchedAt: a.source === 'own' ? null : (c.fallback ? c.fallbackAt : c.fetchedAt) || null, error: a.source === 'own' || c.fallback ? null : c.error || null };
   });
   const events = [];
   for (const a of store.data.apartments) {

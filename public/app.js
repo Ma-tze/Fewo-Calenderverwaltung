@@ -285,9 +285,10 @@
     const aptRows = cfg.apartments.map((a, i) => {
       const st = cfg.status.find(s => s.id === a.id) || {};
       const bk = st.backup ? (st.backup.error ? `<br><span class="small">Ersatz iCal: Fehler (${esc(st.backup.error)})</span>` : `<br><span class="small">Ersatz iCal: ok, ${when(st.backup.fetchedAt)} · ${st.backup.count} Einträge</span>`) : (a.source === 'smoobu' && !a.hasUrl ? '<br><span class="small">kein Ersatz-iCal hinterlegt</span>' : '');
-      const status = a.source === 'smoobu' && st.fallback ? `<span class="badge warn">Ersatz aktiv</span> <span class="small">API ${cfg.smoobu.configured ? (a.smoobuId ? `Fehler: ${esc(st.error || '–')}` : 'ohne Wohnung') : 'ohne Zugang'}, zeigt iCal-Stand ${when(st.fallbackAt)}</span>${bk}`
-        : a.source === 'smoobu' && !cfg.smoobu.configured ? `<span class="badge err">kein API-Zugang</span> <span class="small">SMOOBU_API_KEY/SECRET in .env eintragen</span>${bk}`
-        : a.source === 'smoobu' && !a.smoobuId ? `<span class="badge off">Wohnung wählen</span>${bk}`
+      const fb = st.fallback ? ` <span class="small">Kalender zeigt solange den iCal-Stand.</span>` : '';
+      const status = a.source === 'smoobu' && !cfg.smoobu.configured ? `<span class="badge err">kein API-Zugang</span> <span class="small">SMOOBU_API_KEY/SECRET in .env eintragen</span>${fb}${bk}`
+        : a.source === 'smoobu' && !a.smoobuId ? `<span class="badge err">Smoobu-Wohnung wählen</span>${fb}${bk}`
+        : a.source === 'smoobu' && st.fallback ? `<span class="badge warn">Ersatz aktiv</span> <span class="small">API-Fehler: ${esc(st.error || 'noch kein Abruf')}, zeigt iCal-Stand ${when(st.fallbackAt)}</span>${bk}`
         : a.source === 'smoobu' ? (st.error ? `<span class="badge err">Fehler</span> <span class="small">${esc(st.error)}</span>` : `<span class="badge ok">ok</span> <span class="small">${when(st.fetchedAt)} · ${st.count ?? 0} Einträge</span>`) + bk
         : a.source === 'own' ? `<span class="badge ok">aktiv</span> <span class="small">${cfg.firm.length} Einträge</span>`
         : !a.hasUrl ? '<span class="badge off">kein Link</span>'
