@@ -206,10 +206,12 @@ Danach: grüner Haken „Eingetragen“, und falls nötig der Hinweis „Bitte n
 | Datenbank | **SQLite** | reicht für 4 Wohnungen dauerhaft, eine Datei, leicht zu sichern |
 | PDF | serverseitig HTML → PDF (Playwright/Chromium) | exakt gleiches Layout wie die Ansicht |
 | Benachrichtigung | **ntfy** (Push aufs Handy/iPad über die ntfy-App, Dienst ntfy.sh oder selbst betrieben) + E-Mail als Rückfall | gewünscht von matze; der Server schickt nur eine einfache HTTP-Nachricht, ohne eigenes App-Store-Konto |
-| Hosting | kleiner VPS in Deutschland (z.B. Hetzner, ca. 4–5 €/Monat) mit Docker und automatischem HTTPS | Webhooks und iCal-Feed brauchen eine dauerhaft erreichbare Adresse; DSGVO-freundlich |
+| Hosting | **Start auf matzes Homeserver („homesrv“)** als Docker-Container; von außen erreichbar über einen **Cloudflare Tunnel** (kostenlos, HTTPS, keine Portfreigabe am Router). Später bei Bedarf Umzug auf einen kleinen VPS in Deutschland (ca. 4–5 €/Monat), ohne Code-Änderung | Smoobu-Webhooks, die Portale (Sammel-iCal) und das iPad bei der Schwiegermutter müssen den Server aus dem Internet erreichen |
 | Backup | tägliche Kopie der SQLite-Datei | Smoobu hält ohnehin die Hauptdaten |
 
-Alternativen, falls gewünscht: Serverless (Cloudflare Workers + D1) ist günstiger, macht aber die PDF-Erzeugung umständlicher. Ein Raspberry Pi zu Hause ginge auch, braucht aber eine von außen erreichbare Adresse.
+Hinweise zum Homeserver: Fällt der Strom oder das Internet zu Hause aus, sieht das iPad den letzten Stand und Eintragen ist kurz gesperrt. Smoobu-Daten gehen dabei nicht verloren, weil der Server nach dem Neustart per Abgleich nachholt. Die Portale behalten den zuletzt abgerufenen Sammel-Feed.
+
+Weitere Alternativen: Serverless (Cloudflare Workers + D1) ist günstiger, macht aber die PDF-Erzeugung umständlicher. Ein Raspberry Pi zu Hause ginge auch, braucht aber eine von außen erreichbare Adresse.
 
 Datenschutz: Gastdaten liegen in Smoobu; die App speichert nur einen Zwischenspeicher, Fewo-4-Einträge, Notizen und das Änderungsprotokoll. Zugriff nur mit Anmeldung, iCal-Feed nur mit geheimem Token und **ohne** Gastnamen (nur „belegt“).
 
@@ -225,7 +227,7 @@ Datenschutz: Gastdaten liegen in Smoobu; die App speichert nur einen Zwischenspe
 8. ~~**Welche Infos stehen im Papierkalender?**~~ – beantwortet: Name, Adresse, Telefonnummer, Preis, Anzahl Reisende.
 9. ~~**Namen und Farben der Wohnungen**~~ – beantwortet: konfigurierbar in den Einstellungen (Verwaltung).
 10. ~~**iPad / Drucker**~~ – beantwortet: normales iPad, ca. 3 Jahre alt (aktuelles iPadOS, PWA-tauglich). Gedruckt wird vom PC aus.
-11. **Hosting:** Ist ein kleiner Server (ca. 5 €/Monat) okay, oder gibt es schon eine Domain/einen Server?
+11. **Hosting:** teilweise beantwortet: Zum Ausprobieren läuft alles auf matzes Homeserver („homesrv“). Noch offen: Welches Betriebssystem/welche Hardware, läuft Docker, gibt es eine eigene Domain?
 12. **Altdaten:** Sollen bestehende Einträge aus dem Papierkalender übernommen werden (z.B. einmalig abtippen in Smoobu)?
 
 ## 9. Phasenplan
