@@ -114,7 +114,7 @@ Zwei Wege:
 - **Weg A (wenn iCal geht):** pro Wohnung den Smoobu-iCal-Export bei Holidu importieren und den Holidu-Export in Smoobu importieren. Dann ist das automatisch.
 - **Weg B (Standard, falls nicht):** **Nachtrag-Liste mit Erinnerung.**
   - Jede neue, verschobene oder stornierte Buchung erzeugt automatisch eine Aufgabe „Bei TouristInfo Immenstaad nachtragen: Fewo 2, 12.–19.7. blockieren“.
-  - Sofort geht eine E-Mail (und auf Wunsch eine Push-Nachricht aufs Handy) an die zuständige Person, mit direktem Link ins Holidu-/TouristInfo-Portal.
+  - Sofort geht eine **Push-Nachricht über ntfy an matze und die Schwiegermutter** (je ein eigenes, nicht erratbares Thema), mit direktem Link ins Holidu-/TouristInfo-Portal. E-Mail dient als Rückfall.
   - In der App gibt es oben ein kleines Feld „2 Nachträge offen“. Ein Tipp auf „Erledigt“ hakt es ab.
   - Bleibt eine Aufgabe 24 Stunden offen, kommt eine zweite Erinnerung.
   - Umgekehrt: Buchungen, die über die TouristInfo hereinkommen (vermutlich per E-Mail), trägt man in der App mit Herkunft „TouristInfo“ ein. Dann entsteht natürlich keine Nachtrag-Aufgabe für Holidu.
@@ -202,7 +202,7 @@ Danach: grüner Haken „Eingetragen“, und falls nötig der Hinweis „Bitte n
 | Server | im selben SvelteKit-Projekt (Node) | ein Projekt, ein Deployment |
 | Datenbank | **SQLite** | reicht für 4 Wohnungen dauerhaft, eine Datei, leicht zu sichern |
 | PDF | serverseitig HTML → PDF (Playwright/Chromium) | exakt gleiches Layout wie die Ansicht |
-| Benachrichtigung | E-Mail (SMTP) + optional Web-Push oder Telegram/Pushover | E-Mail ist am robustesten |
+| Benachrichtigung | **ntfy** (Push aufs Handy/iPad über die ntfy-App, Dienst ntfy.sh oder selbst betrieben) + E-Mail als Rückfall | gewünscht von matze; der Server schickt nur eine einfache HTTP-Nachricht, ohne eigenes App-Store-Konto |
 | Hosting | kleiner VPS in Deutschland (z.B. Hetzner, ca. 4–5 €/Monat) mit Docker und automatischem HTTPS | Webhooks und iCal-Feed brauchen eine dauerhaft erreichbare Adresse; DSGVO-freundlich |
 | Backup | tägliche Kopie der SQLite-Datei | Smoobu hält ohnehin die Hauptdaten |
 
@@ -217,7 +217,7 @@ Datenschutz: Gastdaten liegen in Smoobu; die App speichert nur einen Zwischenspe
 3. **Portale:** teilweise beantwortet: Buchungen kommen nur als Anfrage per E-Mail, eine Direktbuchung gibt es nicht. Noch offen: Werden dort immer alle 3 Wohnungen angeboten?
 4. **TouristInfo Immenstaad:** teilweise beantwortet: Heute gibt es kein iCal. Ein neues System kommt voraussichtlich Anfang Dezember 2026, danach prüfen wir es erneut. Noch offen: Wer trägt dort heute nach, und wie kommen von dort Buchungen herein?
 5. ~~**Fewo 4**~~ – beantwortet: Die Firma nutzt die Wohnung durchgängig. Sie bleibt außerhalb von Smoobu.
-6. **Wer bekommt Nachtrag-Erinnerungen?** Nur matze, oder auch die Schwiegermutter? Per E-Mail, SMS, Push?
+6. ~~**Wer bekommt Nachtrag-Erinnerungen?**~~ – beantwortet: beide, matze und die Schwiegermutter, per Push über ntfy.
 7. **Darf die Schwiegermutter selbst stornieren und verschieben**, oder nur anlegen (und Änderungen gehen an matze)?
 8. **Welche Infos stehen heute im Papierkalender** pro Buchung (Name, Telefon, Personen, Preis, Anzahlung, Endreinigung …)? Preise erstmal weglassen?
 9. **Namen und Farben der Wohnungen**, wie sie in der Familie heißen.
