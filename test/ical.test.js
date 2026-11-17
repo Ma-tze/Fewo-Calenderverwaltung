@@ -36,8 +36,8 @@ test('buildICS erzeugt einen Kalender, der wieder eingelesen werden kann', () =>
 test('parsePastedPlan erkennt typische Zeilen aus dem PDF', () => {
   const rows = parsePastedPlan('Belegung 2027\n04.05.2027 – 29.05.2027 Hr. Novak\n1.6.27 bis 30.6.27 Team B\n31.02.2027 - 03.03.2027 ungültig\n10.07.2027-01.07.2027 falsch herum');
   assert.deepEqual(rows, [
-    { from: '2027-05-04', to: '2027-05-29', name: 'Hr. Novak', note: '' },
-    { from: '2027-06-01', to: '2027-06-30', name: 'Team B', note: '' },
+    { from: '2027-05-04', to: '2027-05-29', name: 'Hr. Novak', note: '', phone: '', mobile: '', email: '' },
+    { from: '2027-06-01', to: '2027-06-30', name: 'Team B', note: '', phone: '', mobile: '', email: '' },
   ]);
 });
 
@@ -72,8 +72,8 @@ test('Firmen-Belegungsplan (Text aus PDF) wird erkannt, freie Wochen übersprung
   const { rows, skipped } = parsePlanText(text);
   assert.equal(skipped, 1);
   assert.deepEqual(rows, [
-    { from: '2027-03-27', to: '2027-04-03', name: 'Erika Muster-Frau', note: '3 Reisende, davon 1 Kind' },
-    { from: '2027-05-29', to: '2027-06-05', name: 'Beispiel AG (Reservierung)', note: '' },
-    { from: '2027-07-10', to: '2027-07-22', name: 'Max Mustermann', note: '4 Reisende, davon 2 Kinder · mit Hund' },
+    { from: '2027-03-27', to: '2027-04-03', name: 'Erika Muster-Frau', note: '3 Reisende, davon 1 Kind', phone: '0951000000', mobile: '015100000000', email: 'erika@example.org, erika2@example.org' },
+    { from: '2027-05-29', to: '2027-06-05', name: 'Beispiel AG (Reservierung)', note: '', phone: '', mobile: '', email: '' },
+    { from: '2027-07-10', to: '2027-07-22', name: 'Max Mustermann', note: '4 Reisende, davon 2 Kinder · mit Hund', phone: '', mobile: '017600000000', email: '' },
   ]);
 });

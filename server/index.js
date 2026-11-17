@@ -76,7 +76,7 @@ function calendarPayload() {
   const events = [];
   for (const a of store.data.apartments) {
     if (a.source === 'own') {
-      for (const e of store.data.firm) events.push({ id: `f${e.id}`, apt: a.id, start: e.from, end: e.to, title: e.name, note: e.note || '', source: sourceLabel(a) });
+      for (const e of store.data.firm) events.push({ id: `f${e.id}`, apt: a.id, start: e.from, end: e.to, title: e.name, note: e.note || '', phone: e.phone || '', mobile: e.mobile || '', email: e.email || '', source: sourceLabel(a) });
     } else {
       const c = store.data.cache[a.id];
       (c?.events || []).forEach((e, i) => events.push({ id: `${a.id}-${e.uid || i}`, apt: a.id, start: e.start, end: e.end, title: e.summary, note: e.description || '', source: sourceLabel(a) }));
@@ -204,7 +204,8 @@ function cleanFirm(e) {
   const from = String(e.from || ''), to = String(e.to || '');
   if (!isValidDay(from) || !isValidDay(to)) throw new Error('Bitte gültige Daten angeben.');
   if (to <= from) throw new Error('„Bis“ muss nach „Von“ liegen.');
-  return { from, to, name: String(e.name || '').slice(0, 120).trim() || 'Firma', note: String(e.note || '').slice(0, 300) };
+  const s = (v, n) => String(v || '').slice(0, n).trim();
+  return { from, to, name: s(e.name, 120) || 'Firma', note: s(e.note, 300), phone: s(e.phone, 40), mobile: s(e.mobile, 40), email: s(e.email, 200) };
 }
 
 async function handleAdmin(req, res, p, url) {

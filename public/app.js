@@ -237,6 +237,9 @@
         <dt>${own ? 'Bis' : 'Abreise'}</dt><dd>${fl(e.dep)}</dd>
         <dt>Nächte</dt><dd>${diff(e.arr, e.dep)}</dd>
         ${e.note ? `<dt>Notiz</dt><dd>${esc(e.note)}</dd>` : ''}
+        ${e.phone ? `<dt>Telefon</dt><dd><a href="tel:${esc(e.phone)}">${esc(e.phone)}</a></dd>` : ''}
+        ${e.mobile ? `<dt>Handy</dt><dd><a href="tel:${esc(e.mobile)}">${esc(e.mobile)}</a></dd>` : ''}
+        ${e.email ? `<dt>E-Mail</dt><dd>${e.email.split(', ').map(m => `<a href="mailto:${esc(m)}">${esc(m)}</a>`).join('<br>')}</dd>` : ''}
         <dt>Quelle</dt><dd>${own ? 'Belegungsplan der Firma' : 'Smoobu'}</dd>
       </dl>
       <div class="notice">${own ? 'Wird am PC in den Einstellungen gepflegt.' : 'Änderungen bitte vorerst in Smoobu vornehmen.'}</div>
@@ -330,10 +333,12 @@
       <td>${diff(D(b.from), D(b.to))}</td>
       <td><input class="in" data-fset="${b.id}|name" value="${esc(b.name)}"></td>
       <td><input class="in" data-fset="${b.id}|note" value="${esc(b.note)}"></td>
+      <td><input class="in" data-fset="${b.id}|phone" value="${esc(b.phone)}" placeholder="Telefon"><input class="in" data-fset="${b.id}|mobile" value="${esc(b.mobile)}" placeholder="Handy" style="margin-top:4px"></td>
+      <td><input class="in" data-fset="${b.id}|email" value="${esc(b.email)}" placeholder="E-Mail"></td>
       <td><button class="mini" type="button" data-fdel="${b.id}" aria-label="Zeile löschen">✕</button></td></tr>`).join('');
     const warn = rows.some(clash) ? '<div class="notice warn">Rot markierte Zeilen überschneiden sich.</div>' : '';
-    return `<div class="tbl"><table><thead><tr><th></th><th>Von</th><th>Bis</th><th>Nächte</th><th>Bewohner / Bezeichnung</th><th>Notiz</th><th></th></tr></thead>
-      <tbody>${body || '<tr><td colspan="7" class="small">Noch keine Einträge. Mit „PDF-Belegungsplan hochladen“, „+ Zeile“ oder „Aus Text einfügen“ anlegen.</td></tr>'}</tbody></table></div>${warn}
+    return `<div class="tbl"><table><thead><tr><th></th><th>Von</th><th>Bis</th><th>Nächte</th><th>Bewohner / Bezeichnung</th><th>Notiz</th><th>Telefon / Handy</th><th>E-Mail</th><th></th></tr></thead>
+      <tbody>${body || '<tr><td colspan="9" class="small">Noch keine Einträge. Mit „PDF-Belegungsplan hochladen“, „+ Zeile“ oder „Aus Text einfügen“ anlegen.</td></tr>'}</tbody></table></div>${warn}
       <div class="row"><button class="mini" type="button" id="fAdd">+ Zeile</button>
         <label class="mini" style="display:inline-flex;align-items:center;cursor:pointer">PDF-Belegungsplan hochladen …<input type="file" id="fPdf" accept="application/pdf,.pdf" hidden></label>
         <button class="mini" type="button" id="fPaste">Aus Text einfügen</button></div>
@@ -349,13 +354,13 @@
 
   function previewBox() {
     const r = preview.rows;
-    const body = r.map(x => `<tr><td>${fy(D(x.from))}</td><td>${fy(D(x.to))}</td><td>${diff(D(x.from), D(x.to))}</td><td>${esc(x.name)}</td><td>${esc(x.note)}</td></tr>`).join('');
+    const body = r.map(x => `<tr><td>${fy(D(x.from))}</td><td>${fy(D(x.to))}</td><td>${diff(D(x.from), D(x.to))}</td><td>${esc(x.name)}</td><td>${esc(x.note)}</td><td>${esc([x.phone, x.mobile].filter(Boolean).join(' / '))}</td><td>${esc(x.email)}</td></tr>`).join('');
     const min = r.length ? r.reduce((a, x) => (x.from < a ? x.from : a), r[0].from) : null;
     const max = r.length ? r.reduce((a, x) => (x.to > a ? x.to : a), r[0].to) : null;
     return `<div class="sec" style="border-color:var(--accent)">
       <h3>Vorschau${preview.source ? `: ${esc(preview.source)}` : ''}</h3>
       <p class="d">${r.length} Belegungen erkannt${preview.skipped ? `, ${preview.skipped} Wochen ohne Belegung übersprungen` : ''}. Bitte kurz prüfen.</p>
-      ${r.length ? `<div class="tbl"><table><thead><tr><th>Von</th><th>Bis</th><th>Nächte</th><th>Bewohner / Bezeichnung</th><th>Notiz</th></tr></thead><tbody>${body}</tbody></table></div>
+      ${r.length ? `<div class="tbl"><table><thead><tr><th>Von</th><th>Bis</th><th>Nächte</th><th>Bewohner / Bezeichnung</th><th>Notiz</th><th>Telefon / Handy</th><th>E-Mail</th></tr></thead><tbody>${body}</tbody></table></div>
       <label class="row"><input type="checkbox" id="pvReplace" checked> Bestehende Einträge zwischen ${fy(D(min))} und ${fy(D(max))} durch den neuen Plan ersetzen</label>
       <div class="row"><button class="btn primary" type="button" id="pvGo">Übernehmen</button><button class="btn" type="button" id="pvNo">Abbrechen</button></div>`
       : `<div class="row"><button class="btn" type="button" id="pvNo">Schließen</button></div>`}

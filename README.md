@@ -27,7 +27,7 @@ Danach:
 
 1. Am PC `http://homesrv:8091` öffnen und auf **⚙ Einstellungen** klicken.
 2. Bei Fewo 2–4 den jeweiligen **iCal-Link aus Smoobu** einfügen und speichern. Der Link steht in Smoobu im Kalender-Export der jeweiligen Wohnung. Die App ruft den Kalender sofort ab und zeigt den Status an.
-3. Unter **Belegungsplan Fewo 1** auf **PDF-Belegungsplan hochladen** klicken und das PDF der Firma auswählen. Die App zeigt eine Vorschau, Wochen mit „Keine Belegung“ werden übersprungen. Mit „Übernehmen“ werden die Einträge im Zeitraum des Plans ersetzt. Telefonnummern und E-Mail-Adressen übernimmt die App bewusst nicht.
+3. Unter **Belegungsplan Fewo 1** auf **PDF-Belegungsplan hochladen** klicken und das PDF der Firma auswählen. Die App zeigt eine Vorschau, Wochen mit „Keine Belegung“ werden übersprungen. Mit „Übernehmen“ werden die Einträge im Zeitraum des Plans ersetzt. Telefon, Handy und E-Mail werden mit übernommen. Sie erscheinen in der Buchungskarte (auch auf dem iPad), aber nicht im iCal-Link von Fewo 1.
 4. Namen, Farben, Reihenfolge und **Haupt-/Nebensaison** nach Wunsch anpassen.
 5. Auf dem iPad in Safari `http://homesrv:8090` öffnen, dann **Teilen → Zum Home-Bildschirm**. Ab jetzt öffnet sich der Kalender wie eine App.
 

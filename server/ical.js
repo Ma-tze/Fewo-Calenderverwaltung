@@ -99,16 +99,27 @@ export function parsePlanText(text) {
   const pad = n => String(n).padStart(2, '0');
   const rows = [];
   let skipped = 0;
+  let last = null;
   for (const line of String(text).split(/\r?\n/)) {
     const m = line.match(re);
-    if (!m) continue;
+    if (!m) {
+      // Folgezeile mit E-Mail-Adressen gehört zur vorherigen Belegung
+      const mails = line.match(/[^\s@]+@[^\s@]+/g);
+      if (last && mails) {
+        const fixed = mails.map(x => x.replace(/,(?=[a-z]{2,6}$)/i, '.'));
+        last.email = [...new Set([...(last.email ? last.email.split(', ') : []), ...fixed])].join(', ');
+      }
+      if (/Seite\s+\d+\s+von/i.test(line)) last = null;
+      continue;
+    }
+    last = null;
     const from = `${yr(m[3])}-${pad(m[2])}-${pad(m[1])}`;
     const to = `${yr(m[6])}-${pad(m[5])}-${pad(m[4])}`;
     if (!isValidDay(from) || !isValidDay(to) || to <= from) continue;
     let rest = m[7].trim();
     if (/keine\s+belegung/i.test(rest)) { skipped++; continue; }
     rest = rest.replace(/^\d{1,3}\s+(?=\D)/, ''); // Spalte "Tage"
-    let name = rest, note = '';
+    let name = rest, note = '', phone = '', mobile = '';
     const pm = rest.match(/^(.*?)\s+(\d{1,2})\s+(\d{1,2})\b(.*)$/);
     if (pm && /[A-Za-zÄÖÜäöüß]/.test(pm[1])) {
       name = pm[1];
@@ -116,12 +127,17 @@ export function parsePlanText(text) {
       const parts = [];
       if (total) parts.push(`${total} Reisende${kids ? `, davon ${kids} Kind${kids > 1 ? 'er' : ''}` : ''}`);
       if (/\bJA\b/.test(pm[4])) parts.push('mit Hund');
+      const toks = pm[4].trim().split(/\s+/).filter(t => /^\d+$/.test(t));
+      const ok = t => (/^0\d{6,}$/.test(t || '') ? t : '');
+      if (toks.length >= 2) { phone = ok(toks[toks.length - 2]); mobile = ok(toks[toks.length - 1]); }
+      else if (toks.length === 1) mobile = ok(toks[0]);
       note = parts.join(' · ');
     }
     name = name.replace(/\s+/g, ' ').trim();
     const res = name.match(/^(.*?)\s*Reservierung!?$/i);
     if (res) name = `${res[1] || 'Firma'} (Reservierung)`;
-    rows.push({ from, to, name: name || 'Firma', note });
+    last = { from, to, name: name || 'Firma', note, phone, mobile, email: '' };
+    rows.push(last);
   }
   return { rows, skipped };
 }
