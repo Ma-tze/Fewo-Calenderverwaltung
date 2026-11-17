@@ -582,10 +582,12 @@ function renderSettings() {
     <td><b>${a.name}</b></td>
     <td><input class="in" id="nick-${a.id}" value="${esc(a.nick)}" aria-label="Name ${a.name}"></td>
     <td><div class="swatches">${PALETTE.map(p => `<button type="button" class="sw" style="background:var(${p})" data-color="${a.id}|${p}" aria-pressed="${a.color === `var(${p})`}" aria-label="Farbe"></button>`).join("")}</div></td>
-    <td>${a.smoobu ? `<span class="badge ok">Smoobu</span>` : `<span class="badge off">nur App</span>`}</td>
+    <td>${a.smoobu ? `<span class="badge ok">Smoobu</span>` : `<span class="badge phase">eigener iCal</span>`}</td>
     <td><button class="mini" type="button" data-move="${i}|-1" ${i === 0 ? "disabled" : ""}>▲</button> <button class="mini" type="button" data-move="${i}|1" ${i === APTS.length - 1 ? "disabled" : ""}>▼</button></td>
   </tr>`).join("");
-  const icalRows = APTS.filter(a => a.smoobu).map(a => `<tr><td><b>${a.name}</b> ${esc(a.nick)}</td><td><span class="badge ok">hinterlegt</span></td><td>vor 4 Min.</td><td><button class="mini" type="button" data-fake="Der neue Link wird nur auf dem Server gespeichert.">Link ändern</button></td></tr>`).join("");
+  const icalRows = APTS.map(a => a.smoobu
+    ? `<tr><td><b>${a.name}</b> ${esc(a.nick)}</td><td>Smoobu</td><td><span class="badge ok">hinterlegt</span></td><td>vor 4 Min.</td><td><button class="mini" type="button" data-fake="Der neue Link wird nur auf dem Server gespeichert.">Link ändern</button></td></tr>`
+    : `<tr><td><b>${a.name}</b> ${esc(a.nick)}</td><td>Eigener Kalender der App<br><small>aus „Belegungsplan Fewo 1“</small></td><td><span class="badge ok">aktiv</span></td><td>vor 4 Min.</td><td><button class="mini" type="button" data-fake="Link des eigenen Fewo-1-Kalenders kopiert. Er lässt sich auch in Smoobu oder einem anderen Kalender abonnieren.">Link kopieren</button> <a class="mini" href="#s-fewo1" style="display:inline-flex;align-items:center;text-decoration:none;color:var(--fg)">Tabelle</a></td></tr>`).join("");
   const portalRows = Object.entries(cfg.portals).map(([name, ids]) => `<tr><td><b>${name}</b></td>
     <td>${APTS.filter(a => a.smoobu).map(a => `<label class="tog"><input type="checkbox" data-portal="${name}|${a.id}" ${ids.includes(a.id) ? "checked" : ""}>${a.name}</label>`).join(" &nbsp; ")}</td>
     <td class="mono">https://kalender.&lt;domain&gt;/ical/${name === "FeWo-Bodensee" ? "fwb" : "bu"}-•••••.ics</td>
@@ -605,9 +607,9 @@ function renderSettings() {
       ${sec("wohnungen", "Wohnungen", "Name, Farbe und Reihenfolge, wie sie im Kalender erscheinen.", `<div class="tbl"><table><thead><tr><th>Nr.</th><th>Name in der Familie</th><th>Farbe</th><th>Daten aus</th><th>Reihenfolge</th></tr></thead><tbody>${aptRows}</tbody></table></div>
 `)}
       ${sec("fewo1", "Belegungsplan Fewo 1 (Firma)", "Die Firma schickt ihren Plan als PDF. Hier wird er als Tabelle gepflegt. Änderungen wirken sofort im Kalender.", renderFirmTable())}
-      ${sec("quellen", "Datenquellen", "Woher die Belegung von Fewo 2–4 kommt.", `
-        <div class="kv"><span>Phase 1: Smoobu-iCal-Links</span><span>Abruf alle <select class="in" id="interval" style="width:auto">${[5,10,15,30].map(m => `<option ${cfg.interval === m ? "selected" : ""}>${m}</option>`).join("")}</select> Minuten</span></div>
-        <div class="tbl"><table><thead><tr><th>Wohnung</th><th>iCal-Link</th><th>Letzter Abruf</th><th></th></tr></thead><tbody>${icalRows}</tbody></table></div>
+      ${sec("quellen", "Datenquellen", "Woher die Belegung jeder Wohnung kommt. Alle Wohnungen werden gleich behandelt: Jede hat einen iCal-Kalender als Quelle. Fewo 1 nutzt den eigenen Kalender der App.", `
+        <div class="kv"><span>Phase 1: iCal-Kalender</span><span>Abruf alle <select class="in" id="interval" style="width:auto">${[5,10,15,30].map(m => `<option ${cfg.interval === m ? "selected" : ""}>${m}</option>`).join("")}</select> Minuten</span></div>
+        <div class="tbl"><table><thead><tr><th>Wohnung</th><th>Quelle</th><th>iCal-Link</th><th>Letzter Abruf</th><th></th></tr></thead><tbody>${icalRows}</tbody></table></div>
         <div class="kv"><span>Phase 2: Smoobu-Schnittstelle (API)</span><span><span class="badge off">nicht verbunden</span> &nbsp;<button class="mini" type="button" data-fake="Der API-Schlüssel wird nur auf dem Server hinterlegt, nie im Browser.">Verbinden …</button></span></div>`)}
       ${sec("portale", "Portale", "Sammel-Kalender für Portale, die alle Wohnungen als einen Eintrag führen. „Belegt“ wird gemeldet, wenn alle angehakten Wohnungen belegt sind.", `
         <div class="tbl"><table><thead><tr><th>Portal</th><th>Zählt mit</th><th>Import-Link für das Portal</th><th></th></tr></thead><tbody>${portalRows}</tbody></table></div>

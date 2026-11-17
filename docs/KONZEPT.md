@@ -133,6 +133,7 @@ Dasselbe Nachtrag-Prinzip lässt sich für jeden weiteren Kanal ohne Schnittstel
   - „Aus PDF-Text einfügen“: Zeilen aus dem PDF kopieren und einfügen, die App erkennt Zeiträume wie „04.05.2027 – 29.05.2027 Hr. Novak“.
   - Später optional: PDF direkt hochladen, die App liest die Zeiträume aus und zeigt sie vor dem Übernehmen zur Kontrolle an. (Hängt vom Aufbau des PDFs ab; ein Beispiel-PDF wird benötigt.)
   - Überschneidungen und ungültige Daten werden rot markiert.
+- **Einheitliche Datenquelle:** Die App stellt den Fewo-1-Kalender als **eigenen iCal-Feed** bereit (geheimer Link). In den Einstellungen unter „Datenquellen“ steht Fewo 1 damit genauso da wie Fewo 2–4, nur mit Quelle „Eigener Kalender der App“ statt Smoobu. Der Kalender liest alle vier Wohnungen auf demselben Weg ein. Den Link kann man bei Bedarf auch anderswo abonnieren (z.B. in Smoobu oder im Handy-Kalender).
 - Die Schwiegermutter sieht Fewo 1 nur an; Änderungen laufen über matze.
 
 ## 5. Bedienkonzept für das iPad
