@@ -97,25 +97,37 @@
     const rowH = compact ? 'var(--row-h-c)' : 'var(--row-h)';
     const pubDays = new Map();
     data.holidays.filter(h => h.kind === 'public').forEach(h => pubDays.set(h.start, h.name));
-    let h = `<div class="grid ${compact ? 'compact' : ''}" style="grid-template-columns:var(--label-w) repeat(${2 * n}, minmax(0, 1fr));grid-template-rows:auto ${compact ? '22px 14px' : '30px 18px'} repeat(${data.apartments.length}, ${rowH})">`;
-    h += `<div class="hd" style="grid-column:1;grid-row:1"></div>`;
+    let h = `<div class="grid ${compact ? 'compact' : ''}" style="grid-template-columns:var(--label-w) repeat(${2 * n}, minmax(0, 1fr));grid-template-rows:auto auto ${compact ? '22px 14px' : '30px 18px'} repeat(${data.apartments.length}, ${rowH})">`;
+    // Monatsleiste
+    h += `<div class="mhd" style="grid-column:1;grid-row:1"></div><div class="hd" style="grid-column:1;grid-row:2"></div>`;
+    for (let i = 0; i < n;) {
+      const dt = add(start, i);
+      const left = new Date(dt.getFullYear(), dt.getMonth() + 1, 1);
+      const len = Math.min(n - i, diff(dt, left));
+      h += `<div class="mhd ${dt.getMonth() % 2 ? 'odd' : ''} ${i > 0 ? 'mstart' : ''}" style="grid-column:${2 + 2 * i} / span ${2 * len};grid-row:1">${len >= (compact ? 4 : 2) ? `${MONTHS[dt.getMonth()]} ${dt.getFullYear()}` : ''}</div>`;
+      i += len;
+    }
     for (let i = 0; i < n; i++) {
       const dt = add(start, i), we = dt.getDay() === 0 || dt.getDay() === 6, pub = pubDays.get(iso(dt));
-      const top = compact ? (dt.getDate() === 1 ? `<span class="monthmark">${MONTHS[dt.getMonth()].slice(0, 3)}</span>` : WD[dt.getDay()][0]) : WD[dt.getDay()];
-      h += `<div class="hd ${we ? 'we' : ''} ${pub ? 'pub' : ''} ${same(dt, TODAY) ? 'today' : ''}" style="grid-column:${2 + 2 * i} / span 2;grid-row:1" ${pub ? `title="${esc(pub)}"` : ''}>${top}<b>${dt.getDate()}</b></div>`;
+      // 3-Monats-Ansicht: nur Montage beschriften (Monat steht in der Leiste darüber), sonst wird es zu eng
+      const label = !compact || dt.getDay() === 1;
+      const top = compact ? (label ? WD[dt.getDay()] : '&nbsp;') : WD[dt.getDay()];
+      const ms = dt.getDate() === 1 && i > 0 ? 'mstart' : '';
+      h += `<div class="hd ${we ? 'we' : ''} ${pub ? 'pub' : ''} ${ms} ${same(dt, TODAY) ? 'today' : ''}" style="grid-column:${2 + 2 * i} / span 2;grid-row:2" ${pub ? `title="${esc(pub)}"` : ''}>${top}<b>${label ? dt.getDate() : '&nbsp;'}</b></div>`;
     }
     // Ferien- und Saisonband
-    h += `<div class="rowlbl" style="grid-column:1;grid-row:2">Ferien BW</div><div class="rowlbl" style="grid-column:1;grid-row:3">Saison</div>`;
+    h += `<div class="rowlbl" style="grid-column:1;grid-row:3">Ferien BW</div><div class="rowlbl" style="grid-column:1;grid-row:4">Saison</div>`;
+    for (let i = 1; i < n; i++) if (add(start, i).getDate() === 1) h += `<div class="mline" style="grid-column:${2 + 2 * i} / span 2;grid-row:3 / ${5 + data.apartments.length}"></div>`;
     data.holidays.filter(x => x.arr < end && x.dep > start).forEach(x => {
       const [c0, c1] = spanCols(x, start, n);
-      h += `<div class="band ${x.kind === 'public' ? 'public' : 'school'}" style="grid-column:${c0} / ${c1};grid-row:2" title="${esc(x.name)}">${x.kind === 'public' ? '●' : esc(x.name)}</div>`;
+      h += `<div class="band ${x.kind === 'public' ? 'public' : 'school'}" style="grid-column:${c0} / ${c1};grid-row:3" title="${esc(x.name)}">${x.kind === 'public' ? '●' : esc(x.name)}</div>`;
     });
     data.seasons.filter(x => x.arr < end && x.dep > start).forEach(x => {
       const [c0, c1] = spanCols(x, start, n);
-      h += `<div class="band ${x.kind}" style="grid-column:${c0} / ${c1};grid-row:3" title="${esc(x.name)}">${compact ? '' : esc(x.name)}</div>`;
+      h += `<div class="band ${x.kind}" style="grid-column:${c0} / ${c1};grid-row:4" title="${esc(x.name)}">${compact ? '' : esc(x.name)}</div>`;
     });
     data.apartments.forEach((a, r) => {
-      const row = r + 4;
+      const row = r + 5;
       h += `<div class="lbl" style="grid-column:1;grid-row:${row}"><span class="dot" style="background:${color(a.color)}"></span><span>${esc(a.name)}${a.nick && a.nick !== a.name ? `<small>${esc(a.nick)}</small>` : ''}</span></div>`;
       for (let i = 0; i < n; i++) {
         const dt = add(start, i), we = dt.getDay() === 0 || dt.getDay() === 6;
