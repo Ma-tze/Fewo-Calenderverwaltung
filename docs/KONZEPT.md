@@ -92,6 +92,7 @@ Das Problem: Beide Portale führen die drei Wohnungen als **ein** Objekt. Ein Sm
 
 Die Lösung: **ein Sammel-Feed, den die App selbst erzeugt.**
 
+- Da beide Portale nur Anfragen annehmen, kann dort keine echte Doppelbuchung entstehen. Der Feed sorgt dafür, dass Gäste belegte Zeiträume gar nicht erst anfragen.
 - Der Server berechnet täglich bzw. nach jeder Änderung die Tage, an denen **alle drei** Wohnungen belegt oder blockiert sind (Schnittmenge), und liefert sie als iCal-Datei aus, z.B. `https://<app>/ical/objekt-bodensee-<geheimer-token>.ics`.
 - Diesen Link trägt matze **einmalig** bei beiden Portalen im Feld „externen iCal-Kalender importieren“ ein.
 - Optional ein eigener Schalter je Portal, falls z.B. bei einem Portal nur 2 Wohnungen angeboten werden sollen (dann wäre „belegt“ = beide belegt).
@@ -99,7 +100,7 @@ Die Lösung: **ein Sammel-Feed, den die App selbst erzeugt.**
 Richtung Portal → App:
 
 - Der Export-Feed der Portale sagt ebenfalls nur „alles belegt“ und nicht, **welche** Wohnung gebucht wurde. Daraus kann man keine Buchung ableiten.
-- Anfragen/Buchungen kommen dort vermutlich per E-Mail oder Telefon herein und werden **in der App eingetragen**, mit Herkunft „FeWo-Bodensee“ bzw. „Bodenseeurlaub“. Damit landen sie in Smoobu und im Sammel-Feed.
+- Anfragen kommen dort **nur per E-Mail** herein, eine Direktbuchung gibt es nicht (bestätigt). Nach der Zusage wird die Buchung **in der App eingetragen**, mit Herkunft „FeWo-Bodensee“ bzw. „Bodenseeurlaub“. Damit landen sie in Smoobu und im Sammel-Feed.
 - Der Portal-Feed wird trotzdem eingelesen, aber nur als **Kontrolle**: Meldet ein Portal „belegt“, obwohl in der App noch eine Wohnung frei ist, erscheint ein Hinweis „Bitte prüfen: bodenseeurlaub.de meldet 12.–15.7. als belegt“. (Hinweis: Die beiden Feeds konnten bei der Recherche aus der Cloud nicht abgerufen werden; Format und Inhalt prüfen wir in Phase 1.)
 
 ### 4.3 TouristInfo Immenstaad (Holidu)
@@ -210,7 +211,7 @@ Datenschutz: Gastdaten liegen in Smoobu; die App speichert nur einen Zwischenspe
 
 1. **Smoobu-Tarif:** Ist die API im gebuchten Tarif enthalten, und sind Webhooks verfügbar? Gibt es bereits einen API-Schlüssel nach dem neuen HMAC-Verfahren? (Schlüssel bitte nicht hier eintragen, nur Ja/Nein.)
 2. ~~**Kanäle in Smoobu**~~ – beantwortet: Booking.com und Airbnb sind angebunden. Die Bodensee-Portale sind nicht mit Smoobu verbunden.
-3. **Portale:** Wie kommen Buchungen über ferienwohnungen-bodensee.de und bodenseeurlaub.de herein (Anfrage per E-Mail, Sofortbuchung)? Werden dort immer alle 3 Wohnungen angeboten?
+3. **Portale:** teilweise beantwortet: Buchungen kommen nur als Anfrage per E-Mail, eine Direktbuchung gibt es nicht. Noch offen: Werden dort immer alle 3 Wohnungen angeboten?
 4. **TouristInfo Immenstaad:** Was genau sieht man im Zugang? Gibt es einen Menüpunkt „iCal“ oder „Synchronisation“? Wer trägt dort heute nach, und wie kommen von dort Buchungen herein?
 5. **Fewo 4:** Gibt es Zeiträume, in denen die Firma die Wohnung nicht nutzt und sie frei vermietet wird? Soll sie langfristig in Smoobu?
 6. **Wer bekommt Nachtrag-Erinnerungen?** Nur matze, oder auch die Schwiegermutter? Per E-Mail, SMS, Push?
