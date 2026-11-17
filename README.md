@@ -5,7 +5,7 @@ Konzept: [docs/KONZEPT.md](docs/KONZEPT.md) · Klickbarer Entwurf: [mockup/index
 
 **Stand: Phase 1 (nur Anzeige).**
 
-- **Fewo 2–4** kommen über die iCal-Links aus Smoobu (Abruf alle 15 Minuten, einstellbar).
+- **Fewo 2–4** kommen über die **Smoobu-API** (Abruf alle 5 Minuten, einstellbar) mit Telefon, E-Mail, Personen und Kanal. Der **iCal-Link** aus Smoobu bleibt als Ersatz hinterlegt und springt ein, wenn die API nicht antwortet. Ohne API-Schlüssel geht auch nur iCal.
 - **Fewo 1** (Firma) hat einen eigenen Kalender. Er wird am PC als Tabelle gepflegt und auch als iCal-Link bereitgestellt.
 - **Ansichten:** 4 Wochen, 3 Monate und Jahr, jeweils mit Schulferien und Feiertagen in Baden-Württemberg sowie Haupt- und Nebensaison.
 - **Zwei Ports** (auf dem Homeserver, in `.env` änderbar):
@@ -33,10 +33,24 @@ Danach:
 
 `homesrv` steht hier für den Namen oder die IP-Adresse des Servers im Heimnetz.
 
+### Smoobu-API einrichten
+
+1. In Smoobu unter **Einstellungen → Erweitert → API-Schlüssel** einen Schlüssel mit Secret erzeugen.
+2. Auf dem Server in `.env` eintragen (niemand sonst braucht die Werte):
+   ```
+   SMOOBU_API_KEY=...
+   SMOOBU_API_SECRET=...
+   ```
+3. `docker compose up -d` (Container übernimmt die neuen Werte).
+4. Am PC unter **⚙ Einstellungen → Wohnungen & Datenquellen** bei Fewo 2–4 die Quelle **Smoobu-API** wählen und die passende Smoobu-Wohnung auswählen. Den iCal-Link als Ersatz drin lassen.
+
+Status „Ersatz aktiv“ heißt: Die API hat nicht geantwortet, der Kalender zeigt den Stand aus dem iCal-Link (ohne Telefon/E-Mail). Beim nächsten erfolgreichen Abruf wird wieder die API genutzt.
+
 ### Sicherheit
 
 - Port **8091** (Verwaltung) **nicht ins Internet freigeben**. Setze außerdem in `.env` ein `ADMIN_PASSWORD`.
 - Soll das iPad den Kalender auch außerhalb des Heimnetzes erreichen, gib nur Port **8090** frei, zum Beispiel per Cloudflare Tunnel. Setze dann `VIEW_KEY` und `PUBLIC_URL` in `.env` und öffne auf dem iPad einmalig `https://kalender.<domain>/?key=<VIEW_KEY>`.
+- Die Smoobu-API-Schlüssel stehen nur in `.env` auf dem Server und werden nie in der Oberfläche angezeigt oder gespeichert.
 - Die Smoobu-iCal-Links liegen nur auf dem Server (im Docker-Volume `fewo-data`). Sie werden in der Oberfläche nicht wieder angezeigt.
 
 ### Aktualisieren
@@ -75,4 +89,6 @@ npm test
 | `PUBLIC_URL` | – | Öffentliche Adresse der iPad-Ansicht, wird für den iCal-Link von Fewo 1 genutzt |
 | `VIEW_KEY` | – | Zugangsschlüssel für die iPad-Ansicht |
 | `ADMIN_PASSWORD` | – | Passwort für die PC-Verwaltung |
+| `SMOOBU_API_KEY` / `SMOOBU_API_SECRET` | – | Zugang zur Smoobu-API (HMAC) |
+| `SMOOBU_AUTH` | `hmac` | `legacy` nur für den alten Api-Key ohne Secret |
 | `HOLIDAY_REGION` | `DE-BW` | Bundesland für Schulferien und Feiertage (Quelle: openholidaysapi.org) |

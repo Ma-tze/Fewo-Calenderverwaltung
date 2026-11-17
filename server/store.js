@@ -13,7 +13,7 @@ const DEFAULTS = () => ({
     { id: 3, name: 'Fewo 3', nick: 'Fewo 3', color: 'p3', source: 'ical', icalUrl: '' },
     { id: 4, name: 'Fewo 4', nick: 'Fewo 4', color: 'p4', source: 'ical', icalUrl: '' },
   ],
-  settings: { intervalMinutes: 15 },
+  settings: { intervalMinutes: 5 },
   firm: [],
   seasons: [
     { id: 1, kind: 'haupt', from: '07-01', to: '08-31', label: 'Hauptsaison' },

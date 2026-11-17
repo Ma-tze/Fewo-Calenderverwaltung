@@ -252,7 +252,7 @@
         ${e.phone ? `<dt>Telefon</dt><dd><a href="tel:${esc(e.phone)}">${esc(e.phone)}</a></dd>` : ''}
         ${e.mobile ? `<dt>Handy</dt><dd><a href="tel:${esc(e.mobile)}">${esc(e.mobile)}</a></dd>` : ''}
         ${e.email ? `<dt>E-Mail</dt><dd>${e.email.split(', ').map(m => `<a href="mailto:${esc(m)}">${esc(m)}</a>`).join('<br>')}</dd>` : ''}
-        <dt>Quelle</dt><dd>${own ? 'Belegungsplan der Firma' : 'Smoobu'}</dd>
+        <dt>Quelle</dt><dd>${own ? 'Belegungsplan der Firma' : `Smoobu${e.channel ? ` · ${esc(e.channel)}` : ''}`}</dd>
       </dl>
       <div class="notice">${own ? 'Wird am PC in den Einstellungen gepflegt.' : 'Änderungen bitte vorerst in Smoobu vornehmen.'}</div>
       <div class="row end"><button class="btn primary" type="button" id="closeB">Schließen</button></div>`);
@@ -265,6 +265,7 @@
   const firmSel = new Set();
   let pasteOpen = false;
   let preview = null; // { rows, skipped, source }
+  let smoobuApts = null, smoobuErr = '';
 
   async function loadCfg() { cfg = await api('/api/admin/config'); }
 
@@ -272,24 +273,36 @@
     const v = $('#view');
     if (MODE !== 'admin') { state.view = 'w4'; return render(); }
     try { await loadCfg(); } catch (e) { v.innerHTML = `<div class="notice warn">${esc(e.message)}</div>`; return; }
+    smoobuErr = '';
+    if (cfg.smoobu.configured && cfg.apartments.some(a => a.source === 'smoobu') && !smoobuApts) {
+      try { smoobuApts = (await api('/api/admin/smoobu/apartments')).apartments; } catch (e) { smoobuErr = e.message; }
+    }
     const sec = (id, title, desc, inner) => `<section class="sec" id="s-${id}"><h3>${title}</h3>${desc ? `<p class="d">${desc}</p>` : ''}${inner}</section>`;
     const when = t => t ? new Date(t).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' }) : '–';
     const n = cfg.apartments.length;
 
+    const urlRow = (a, ph) => `<div class="row"><input class="in" data-url="${a.id}" placeholder="${a.hasUrl ? `hinterlegt (${esc(a.urlHost)}) – zum Ändern neuen Link einfügen` : ph}" autocomplete="off"><button class="mini" type="button" data-saveurl="${a.id}">Speichern</button></div>`;
     const aptRows = cfg.apartments.map((a, i) => {
       const st = cfg.status.find(s => s.id === a.id) || {};
-      const status = a.source === 'own' ? `<span class="badge ok">aktiv</span> <span class="small">${cfg.firm.length} Einträge</span>`
+      const bk = st.backup ? (st.backup.error ? `<br><span class="small">Ersatz iCal: Fehler (${esc(st.backup.error)})</span>` : `<br><span class="small">Ersatz iCal: ok, ${when(st.backup.fetchedAt)} · ${st.backup.count} Einträge</span>`) : (a.source === 'smoobu' && !a.hasUrl ? '<br><span class="small">kein Ersatz-iCal hinterlegt</span>' : '');
+      const status = a.source === 'smoobu' && st.fallback ? `<span class="badge warn">Ersatz aktiv</span> <span class="small">API ${cfg.smoobu.configured ? (a.smoobuId ? `Fehler: ${esc(st.error || '–')}` : 'ohne Wohnung') : 'ohne Zugang'}, zeigt iCal-Stand ${when(st.fallbackAt)}</span>${bk}`
+        : a.source === 'smoobu' && !cfg.smoobu.configured ? `<span class="badge err">kein API-Zugang</span> <span class="small">SMOOBU_API_KEY/SECRET in .env eintragen</span>${bk}`
+        : a.source === 'smoobu' && !a.smoobuId ? `<span class="badge off">Wohnung wählen</span>${bk}`
+        : a.source === 'smoobu' ? (st.error ? `<span class="badge err">Fehler</span> <span class="small">${esc(st.error)}</span>` : `<span class="badge ok">ok</span> <span class="small">${when(st.fetchedAt)} · ${st.count ?? 0} Einträge</span>`) + bk
+        : a.source === 'own' ? `<span class="badge ok">aktiv</span> <span class="small">${cfg.firm.length} Einträge</span>`
         : !a.hasUrl ? '<span class="badge off">kein Link</span>'
         : st.error ? `<span class="badge err" title="${esc(st.error)}">Fehler</span> <span class="small">${esc(st.error)}</span>`
         : `<span class="badge ok">ok</span> <span class="small">${when(st.fetchedAt)} · ${st.count ?? 0} Einträge</span>`;
-      const link = a.source === 'own'
+      const link = a.source === 'smoobu'
+        ? (cfg.smoobu.configured ? `<div class="row"><select class="in" data-smoobu="${a.id}" style="width:auto"><option value="">– Smoobu-Wohnung –</option>${(smoobuApts || []).map(x => `<option value="${x.id}" ${String(x.id) === String(a.smoobuId) ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}${a.smoobuId && !(smoobuApts || []).some(x => String(x.id) === String(a.smoobuId)) ? `<option value="${esc(a.smoobuId)}" selected>ID ${esc(a.smoobuId)}</option>` : ''}</select>${smoobuErr ? `<span class="small">${esc(smoobuErr)}</span>` : ''}</div>` : '<span class="small">API-Zugang fehlt</span>') + urlRow(a, 'Ersatz: iCal-Link aus Smoobu einfügen')
+        : a.source === 'own'
         ? `<span class="small">Eigener Kalender der App</span> <a class="mini" href="#s-firm" style="display:inline-flex;align-items:center;text-decoration:none;color:var(--fg)">Tabelle</a>`
-        : `<div class="row"><input class="in" data-url="${a.id}" placeholder="${a.hasUrl ? `hinterlegt (${esc(a.urlHost)}) – zum Ändern neuen Link einfügen` : 'iCal-Link aus Smoobu einfügen'}" autocomplete="off"><button class="mini" type="button" data-saveurl="${a.id}">Speichern</button></div>`;
+        : urlRow(a, 'iCal-Link aus Smoobu einfügen');
       return `<tr>
         <td><b>${esc(a.name)}</b></td>
         <td><input class="in" data-nick="${a.id}" value="${esc(a.nick)}" aria-label="Name ${esc(a.name)}"></td>
         <td><div class="swatches">${cfg.colors.map(c => `<button type="button" class="sw" style="background:var(--${c})" data-color="${a.id}|${c}" aria-pressed="${a.color === c}" aria-label="Farbe ${c}"></button>`).join('')}</div></td>
-        <td><select class="in" data-source="${a.id}"><option value="ical" ${a.source === 'ical' ? 'selected' : ''}>iCal-Link (Smoobu)</option><option value="own" ${a.source === 'own' ? 'selected' : ''}>Eigener Kalender</option></select></td>
+        <td><select class="in" data-source="${a.id}"><option value="smoobu" ${a.source === 'smoobu' ? 'selected' : ''}>Smoobu-API</option><option value="ical" ${a.source === 'ical' ? 'selected' : ''}>iCal-Link (Smoobu)</option><option value="own" ${a.source === 'own' ? 'selected' : ''}>Eigener Kalender</option></select></td>
         <td style="min-width:280px">${link}</td>
         <td>${status}</td>
         <td style="white-space:nowrap"><button class="mini" type="button" data-move="${i}|-1" ${i === 0 ? 'disabled' : ''} aria-label="nach oben">▲</button> <button class="mini" type="button" data-move="${i}|1" ${i === n - 1 ? 'disabled' : ''} aria-label="nach unten">▼</button></td>
@@ -393,6 +406,7 @@
     const post = (p, body) => api(p, { method: 'POST', body });
     $$('[data-nick]').forEach(i => i.onchange = () => act(() => put(`/api/admin/apartments/${i.dataset.nick}`, { nick: i.value }), 'Gespeichert.'));
     $$('[data-color]').forEach(b => b.onclick = () => { const [id, c] = b.dataset.color.split('|'); act(() => put(`/api/admin/apartments/${id}`, { color: c })); });
+    $$('[data-smoobu]').forEach(s => s.onchange = () => act(() => put(`/api/admin/apartments/${s.dataset.smoobu}`, { smoobuId: s.value }), 'Zugeordnet und abgerufen.'));
     $$('[data-source]').forEach(s => s.onchange = () => act(() => put(`/api/admin/apartments/${s.dataset.source}`, { source: s.value }), 'Quelle geändert.'));
     $$('[data-saveurl]').forEach(b => b.onclick = () => {
       const inp = $(`[data-url="${b.dataset.saveurl}"]`);

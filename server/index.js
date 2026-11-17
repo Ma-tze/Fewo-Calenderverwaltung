@@ -14,6 +14,7 @@ import { parseICS, buildICS, parsePastedPlan, parsePlanText, isValidDay, addDays
 import { execFile } from 'node:child_process';
 import os from 'node:os';
 import { fetchHolidays, expandSeasons } from './holidays.js';
+import { smoobuConfigured, smoobuAuthMode, listApartments as smoobuApartments, fetchReservations } from './smoobu.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC = path.join(__dirname, '..', 'public');
@@ -29,20 +30,59 @@ const COLORS = ['p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7', 'p8'];
 
 /* ---------- iCal-Abruf ---------- */
 
+// Quelle "ical": Ergebnis direkt in den Cache. Quelle "smoobu": iCal-Link als Ersatz (backup) mit abrufen.
 async function fetchApartment(apt) {
-  if (apt.source !== 'ical' || !apt.icalUrl) return;
-  const prev = store.data.cache[apt.id] || {};
+  if (!['ical', 'smoobu'].includes(apt.source) || !apt.icalUrl) return;
+  const target = apt.source === 'ical' ? store.data.cache : (store.data.backup ||= {});
+  const prev = target[apt.id] || {};
   try {
     const res = await fetch(apt.icalUrl, { signal: AbortSignal.timeout(20000), headers: { 'User-Agent': 'Fewo-Kalender/1.0' } });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const text = await res.text();
     if (!text.includes('BEGIN:VCALENDAR')) throw new Error('Antwort ist kein iCal-Kalender');
     const events = parseICS(text).map(e => ({ uid: e.uid || '', start: e.start, end: e.end, summary: e.summary || '', description: e.description || '' }));
-    store.data.cache[apt.id] = { fetchedAt: new Date().toISOString(), error: null, events };
+    target[apt.id] = { fetchedAt: new Date().toISOString(), error: null, events };
   } catch (e) {
     // letzten Stand behalten, Fehler merken
-    store.data.cache[apt.id] = { ...prev, error: `${e.message}`, failedAt: new Date().toISOString(), events: prev.events || [] };
+    target[apt.id] = { ...prev, error: `${e.message}`, failedAt: new Date().toISOString(), events: prev.events || [] };
     console.error(`Abruf ${apt.name} fehlgeschlagen:`, e.message);
+  }
+}
+
+/* ---------- Smoobu-API-Abruf (alle Wohnungen mit Quelle "smoobu" in einem Durchgang) ---------- */
+
+async function fetchSmoobu() {
+  const apts = store.data.apartments.filter(a => a.source === 'smoobu' && a.smoobuId);
+  if (!apts.length) return;
+  const y = new Date().getFullYear();
+  try {
+    const all = await fetchReservations(`${y - 1}-01-01`, `${y + 2}-12-31`);
+    const now = new Date().toISOString();
+    for (const a of apts) {
+      const events = all.filter(b => String(b.aptId) === String(a.smoobuId)).map(b => ({
+        uid: b.uid, start: b.start, end: b.end, summary: b.summary,
+        description: b.notice, phone: b.phone, email: b.email, adults: b.adults, children: b.children, channel: b.channel, blocked: b.blocked,
+      }));
+      store.data.cache[a.id] = { fetchedAt: now, error: null, events };
+    }
+  } catch (e) {
+    for (const a of apts) {
+      const prev = store.data.cache[a.id] || {};
+      store.data.cache[a.id] = { ...prev, error: e.message, failedAt: new Date().toISOString(), events: prev.events || [] };
+    }
+    console.error('Smoobu-Abruf fehlgeschlagen:', e.message);
+  }
+}
+
+// Klappt der Smoobu-API-Abruf nicht (Fehler oder kein Zugang), zeigt der Kalender den iCal-Stand.
+function applyFallback() {
+  for (const a of store.data.apartments) {
+    if (a.source !== 'smoobu') continue;
+    const c = store.data.cache[a.id] || {};
+    const bk = store.data.backup?.[a.id];
+    const apiOk = smoobuConfigured() && a.smoobuId && c.fetchedAt && !c.error;
+    if (apiOk || !a.icalUrl || !bk?.fetchedAt || bk.error) continue;
+    store.data.cache[a.id] = { ...c, events: bk.events, fallback: true, fallbackAt: bk.fetchedAt };
   }
 }
 
@@ -50,7 +90,8 @@ let refreshing = null;
 async function refreshAll() {
   if (refreshing) return refreshing;
   refreshing = (async () => {
-    await Promise.all(store.data.apartments.map(fetchApartment));
+    await Promise.all([...store.data.apartments.map(fetchApartment), fetchSmoobu()]);
+    applyFallback();
     store.save();
   })().finally(() => { refreshing = null; });
   return refreshing;
@@ -66,12 +107,13 @@ function schedule() {
 /* ---------- Daten für den Kalender ---------- */
 
 function sourceLabel(apt) { return apt.source === 'own' ? 'Belegungsplan' : 'Smoobu'; }
+function isConfigured(a) { return a.source === 'own' || (a.source === 'ical' && !!a.icalUrl) || (a.source === 'smoobu' && ((!!a.smoobuId && smoobuConfigured()) || !!a.icalUrl)); }
 
 function calendarPayload() {
   const apartments = store.data.apartments.map(a => {
     const c = store.data.cache[a.id] || {};
     return { id: a.id, name: a.name, nick: a.nick, color: a.color, source: a.source,
-      configured: a.source === 'own' || !!a.icalUrl, fetchedAt: a.source === 'own' ? null : c.fetchedAt || null, error: a.source === 'own' ? null : c.error || null };
+      configured: isConfigured(a), fetchedAt: a.source === 'own' ? null : (c.fallback ? c.fallbackAt : c.fetchedAt) || null, error: a.source === 'own' || c.fallback ? null : c.error || null };
   });
   const events = [];
   for (const a of store.data.apartments) {
@@ -79,7 +121,11 @@ function calendarPayload() {
       for (const e of store.data.firm) events.push({ id: `f${e.id}`, apt: a.id, start: e.from, end: e.to, title: e.name, note: e.note || '', phone: e.phone || '', mobile: e.mobile || '', email: e.email || '', source: sourceLabel(a) });
     } else {
       const c = store.data.cache[a.id];
-      (c?.events || []).forEach((e, i) => events.push({ id: `${a.id}-${e.uid || i}`, apt: a.id, start: e.start, end: e.end, title: e.summary, note: e.description || '', source: sourceLabel(a) }));
+      (c?.events || []).forEach((e, i) => {
+        const persons = e.adults || e.children ? `${(e.adults || 0) + (e.children || 0)} Reisende${e.children ? `, davon ${e.children} Kind${e.children > 1 ? 'er' : ''}` : ''}` : '';
+        events.push({ id: `${a.id}-${e.uid || i}`, apt: a.id, start: e.start, end: e.end, title: e.summary, note: [persons, e.description].filter(Boolean).join(' · '),
+          phone: e.phone || '', mobile: '', email: e.email || '', channel: e.channel || '', source: sourceLabel(a) });
+      });
     }
   }
   const y = new Date().getFullYear();
@@ -215,9 +261,11 @@ async function handleAdmin(req, res, p, url) {
   if (p === '/api/admin/config' && m === 'GET') {
     return send(res, 200, {
       apartments: d.apartments.map(a => ({ ...a, icalUrl: undefined, hasUrl: !!a.icalUrl, urlHost: a.icalUrl ? safeHost(a.icalUrl) : '' })),
+      smoobu: { configured: smoobuConfigured(), auth: smoobuAuthMode() },
       settings: d.settings, colors: COLORS,
       feedUrl: feedPath() ? `${PUBLIC_URL || `http://${(req.headers.host || 'localhost').replace(/:\d+$/, '')}:${process.env.IPAD_PORT || VIEW_PORT}`}${feedPath()}` : '',
-      status: d.apartments.map(a => ({ id: a.id, ...(d.cache[a.id] ? { fetchedAt: d.cache[a.id].fetchedAt, error: d.cache[a.id].error, count: d.cache[a.id].events?.length || 0 } : {}) })),
+      status: d.apartments.map(a => ({ id: a.id, ...(d.cache[a.id] ? { fetchedAt: d.cache[a.id].fetchedAt, error: d.cache[a.id].error, count: d.cache[a.id].events?.length || 0, fallback: !!d.cache[a.id].fallback, fallbackAt: d.cache[a.id].fallbackAt || null } : {}),
+        backup: d.backup?.[a.id] ? { fetchedAt: d.backup[a.id].fetchedAt, error: d.backup[a.id].error, count: d.backup[a.id].events?.length || 0 } : null })),
       firm: [...d.firm].sort((a, b) => a.from.localeCompare(b.from)),
       seasons: d.seasons,
       manualHolidays: d.manualHolidays,
@@ -232,14 +280,17 @@ async function handleAdmin(req, res, p, url) {
     const b = await readJson(req);
     if (b.nick !== undefined) apt.nick = String(b.nick).slice(0, 40).trim() || apt.name;
     if (b.color !== undefined) { if (!COLORS.includes(b.color)) throw new Error('Farbe unbekannt'); apt.color = b.color; }
-    if (b.source !== undefined) { if (!['ical', 'own'].includes(b.source)) throw new Error('Quelle unbekannt'); apt.source = b.source; }
+    if (b.source !== undefined) { if (!['ical', 'own', 'smoobu'].includes(b.source)) throw new Error('Quelle unbekannt'); apt.source = b.source; delete d.cache[apt.id];
+      // Smoobu-API: Abruf alle 5 Minuten als Standard
+      if (b.source === 'smoobu' && d.settings.intervalMinutes > 5) { d.settings.intervalMinutes = 5; schedule(); } }
+    if (b.smoobuId !== undefined) { apt.smoobuId = b.smoobuId ? String(b.smoobuId).replace(/\D/g, '') : ''; delete d.cache[apt.id]; }
     if (b.icalUrl !== undefined) {
       const u = String(b.icalUrl).trim();
       if (u && !/^https?:\/\//i.test(u)) throw new Error('Der Link muss mit https:// beginnen.');
-      apt.icalUrl = u; delete d.cache[apt.id];
+      apt.icalUrl = u; if (apt.source === 'ical') delete d.cache[apt.id]; if (d.backup) delete d.backup[apt.id];
     }
     store.save();
-    if (b.icalUrl !== undefined || b.source !== undefined) await fetchApartment(apt), store.save();
+    if (b.icalUrl !== undefined || b.source !== undefined || b.smoobuId !== undefined) { await Promise.all([fetchApartment(apt), fetchSmoobu()]); applyFallback(); store.save(); }
     return send(res, 200, { ok: true });
   }
 
@@ -257,6 +308,10 @@ async function handleAdmin(req, res, p, url) {
     if (![5, 10, 15, 30, 60].includes(n)) throw new Error('Intervall ungültig');
     d.settings.intervalMinutes = n; store.save(); schedule();
     return send(res, 200, { ok: true });
+  }
+
+  if (p === '/api/admin/smoobu/apartments' && m === 'GET') {
+    return send(res, 200, { apartments: await smoobuApartments() });
   }
 
   if (p === '/api/admin/refresh' && m === 'POST') { await Promise.all([refreshAll(), fetchHolidays(store)]); store.save(); return send(res, 200, { ok: true }); }
