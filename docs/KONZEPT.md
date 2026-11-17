@@ -107,7 +107,9 @@ Richtung Portal → App:
 
 Holidu unterstützt für Gastgeber grundsätzlich iCal-Import und -Export pro Inserat, auch mit Smoobu (Abgleich nicht in Echtzeit, laut Holidu „einige Stunden“). Die TouristInfo nutzt aber vermutlich das Holidu-Produkt für Tourismusorganisationen („Holidu Smart Destination“), bei dem der Gastgeber-Zugang eingeschränkt ist. Ob dort iCal möglich ist, ist offen.
 
-Zwei Wege, je nach Antwort der TouristInfo:
+**Stand 17.11.2026:** Im heutigen Zugang gibt es kein iCal, deshalb wird zunächst Weg B geplant. Laut matze kommt in etwa 3 Wochen (Anfang Dezember 2026) ein neues System. Dann prüfen wir, ob Weg A möglich wird. Die App ist so gebaut, dass der Wechsel nur eine Einstellung ist.
+
+Zwei Wege:
 
 - **Weg A (wenn iCal geht):** pro Wohnung den Smoobu-iCal-Export bei Holidu importieren und den Holidu-Export in Smoobu importieren. Dann ist das automatisch.
 - **Weg B (Standard, falls nicht):** **Nachtrag-Liste mit Erinnerung.**
@@ -212,7 +214,7 @@ Datenschutz: Gastdaten liegen in Smoobu; die App speichert nur einen Zwischenspe
 1. **Smoobu-Tarif:** Ist die API im gebuchten Tarif enthalten, und sind Webhooks verfügbar? Gibt es bereits einen API-Schlüssel nach dem neuen HMAC-Verfahren? (Schlüssel bitte nicht hier eintragen, nur Ja/Nein.)
 2. ~~**Kanäle in Smoobu**~~ – beantwortet: Booking.com und Airbnb sind angebunden. Die Bodensee-Portale sind nicht mit Smoobu verbunden.
 3. **Portale:** teilweise beantwortet: Buchungen kommen nur als Anfrage per E-Mail, eine Direktbuchung gibt es nicht. Noch offen: Werden dort immer alle 3 Wohnungen angeboten?
-4. **TouristInfo Immenstaad:** Was genau sieht man im Zugang? Gibt es einen Menüpunkt „iCal“ oder „Synchronisation“? Wer trägt dort heute nach, und wie kommen von dort Buchungen herein?
+4. **TouristInfo Immenstaad:** teilweise beantwortet: Heute gibt es kein iCal. Ein neues System kommt voraussichtlich Anfang Dezember 2026, danach prüfen wir es erneut. Noch offen: Wer trägt dort heute nach, und wie kommen von dort Buchungen herein?
 5. **Fewo 4:** Gibt es Zeiträume, in denen die Firma die Wohnung nicht nutzt und sie frei vermietet wird? Soll sie langfristig in Smoobu?
 6. **Wer bekommt Nachtrag-Erinnerungen?** Nur matze, oder auch die Schwiegermutter? Per E-Mail, SMS, Push?
 7. **Darf die Schwiegermutter selbst stornieren und verschieben**, oder nur anlegen (und Änderungen gehen an matze)?
