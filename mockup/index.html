@@ -238,7 +238,12 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;",
 let uid = 1;
 const B = (apt, arr, dep, name, src, extra = {}) => ({ id: uid++, apt, arr: D(arr), dep: D(dep), name, src, guests: 2, price: null, phone: "", addr: "", note: "", ...extra });
 let bookings = [
-  { id: uid++, apt: 1, arr: D("2025-01-01"), dep: D("2028-01-01"), name: "Dauermiete Firma Schwarz GmbH", src: "Mietvertrag", firm: true },
+  ...[
+    ["2026-10-05", "2026-11-14", "Hr. Novak", ""],
+    ["2026-11-16", "2026-12-19", "Hr. Petrović + Hr. Ilić", "Montage Werk 2"],
+    ["2027-01-07", "2027-02-27", "Hr. Novak", ""],
+    ["2027-03-01", "2027-04-30", "Team Elektro (2 Pers.)", ""],
+  ].map(([a, d, n, note]) => ({ id: uid++, apt: 1, arr: D(a), dep: D(d), name: n, src: "Belegungsplan Firma", firm: true, note })),
   B(2, "2026-11-14", "2026-11-21", "Maier", "Telefon / E-Mail", { guests: 2, price: 595, phone: "07545 123456", addr: "Lindenstr. 4, 88045 Friedrichshafen", note: "Hund (klein)" }),
   B(2, "2026-11-24", "2026-12-01", "Huber", "FeWo-Bodensee", { guests: 3, price: 640, phone: "0711 998877", addr: "Am Markt 2, 70173 Stuttgart" }),
   B(2, "2026-12-22", "2027-01-02", "Familie Schulz", "Booking.com", { guests: 4, price: 1210 }),
@@ -395,7 +400,7 @@ document.addEventListener("click", e => {
   if (free) {
     const [apt, i] = free.dataset.free.split("|").map(Number);
     const base = state.view === "w4" ? state.start : state.m3;
-    if (apt === 1) return toast("Fewo 1 ist dauerhaft an die Firma vermietet.");
+    if (apt === 1) return toast("Fewo 1 wird über den Belegungsplan der Firma gepflegt (Einstellungen am PC).");
     return openWizard({ apt, arr: add(base, i) });
   }
   const mon = e.target.closest("[data-month]");
@@ -415,7 +420,7 @@ function closeOverlay() { $("#overlayRoot").innerHTML = ""; }
 function openBooking(id) {
   const b = bookings.find(x => x.id === id), a = aptOf(b.apt);
   if (b.firm) {
-    overlay(`<h2>${esc(b.name)}</h2><div class="notice">${a.name} ist durchgängig an die Firma vermietet. Hier gibt es nichts zu pflegen.</div><div class="row end"><button class="btn primary" type="button" id="closeB">Schließen</button></div>`);
+    overlay(`<h2>${esc(b.name)}</h2><dl class="facts"><dt>Wohnung</dt><dd>${a.name} „${a.nick}“</dd><dt>Von</dt><dd>${fl(b.arr)} ${b.arr.getFullYear()}</dd><dt>Bis</dt><dd>${fl(b.dep)} ${b.dep.getFullYear()}</dd><dt>Notiz</dt><dd>${esc(b.note || "–")}</dd></dl><div class="notice">Stammt aus dem Belegungsplan der Firma. matze pflegt ihn am PC in den Einstellungen.</div><div class="row end"><button class="btn primary" type="button" id="closeB">Schließen</button></div>`);
     return ($("#closeB").onclick = closeOverlay);
   }
   const nights = diff(b.arr, b.dep), ro = READONLY.includes(b.src);
@@ -478,7 +483,7 @@ function drawWizard(w) {
   if (w.step === 1) {
     body = `<h2>Welche Wohnung?</h2><div class="choices">${APTS.map(x => x.smoobu
       ? `<button type="button" class="choice" data-apt="${x.id}" aria-pressed="${w.apt === x.id}"><span class="dot" style="background:${x.color}"></span><span>${x.name}<small>${x.nick}</small></span></button>`
-      : `<button type="button" class="choice" disabled style="opacity:.5"><span class="dot" style="background:${x.color}"></span><span>${x.name}<small>dauerhaft vermietet</small></span></button>`).join("")}</div>`;
+      : `<button type="button" class="choice" disabled style="opacity:.5"><span class="dot" style="background:${x.color}"></span><span>${x.name}<small>Belegungsplan Firma</small></span></button>`).join("")}</div>`;
     canNext = !!w.apt;
   } else if (w.step === 2) {
     const m = w.cal, days = new Date(m.getFullYear(), m.getMonth() + 1, 0).getDate(), lead = (new Date(m.getFullYear(), m.getMonth(), 1).getDay() + 6) % 7;
@@ -580,7 +585,6 @@ function renderSettings() {
     <td>${a.smoobu ? `<span class="badge ok">Smoobu</span>` : `<span class="badge off">nur App</span>`}</td>
     <td><button class="mini" type="button" data-move="${i}|-1" ${i === 0 ? "disabled" : ""}>▲</button> <button class="mini" type="button" data-move="${i}|1" ${i === APTS.length - 1 ? "disabled" : ""}>▼</button></td>
   </tr>`).join("");
-  const firm = bookings.find(b => b.firm);
   const icalRows = APTS.filter(a => a.smoobu).map(a => `<tr><td><b>${a.name}</b> ${esc(a.nick)}</td><td><span class="badge ok">hinterlegt</span></td><td>vor 4 Min.</td><td><button class="mini" type="button" data-fake="Der neue Link wird nur auf dem Server gespeichert.">Link ändern</button></td></tr>`).join("");
   const portalRows = Object.entries(cfg.portals).map(([name, ids]) => `<tr><td><b>${name}</b></td>
     <td>${APTS.filter(a => a.smoobu).map(a => `<label class="tog"><input type="checkbox" data-portal="${name}|${a.id}" ${ids.includes(a.id) ? "checked" : ""}>${a.name}</label>`).join(" &nbsp; ")}</td>
@@ -593,13 +597,14 @@ function renderSettings() {
     <td><button class="mini" type="button" data-fake="Testnachricht an ${p.who} gesendet.">Test senden</button></td></tr>`).join("");
   return `<div class="settings">
     <nav class="snav" aria-label="Bereiche">
-      <a href="#s-wohnungen">Wohnungen</a><a href="#s-quellen">Datenquellen</a><a href="#s-portale">Portale</a>
+      <a href="#s-wohnungen">Wohnungen</a><a href="#s-fewo1">Belegungsplan Fewo 1</a><a href="#s-quellen">Datenquellen</a><a href="#s-portale">Portale</a>
       <a href="#s-benachrichtigungen">Benachrichtigungen</a><a href="#s-zugaenge">Zugänge &amp; Geräte</a><a href="#s-anzeige">Anzeige &amp; PDF</a><a href="#s-protokoll">Protokoll</a>
     </nav>
     <div class="sbody">
       <div class="hint">Nur für die Verwaltung, gedacht für den PC. Auf dem iPad der Schwiegermutter ist diese Seite nicht sichtbar. Änderungen an Name und Farbe wirken im Mockup sofort im Kalender.</div>
       ${sec("wohnungen", "Wohnungen", "Name, Farbe und Reihenfolge, wie sie im Kalender erscheinen.", `<div class="tbl"><table><thead><tr><th>Nr.</th><th>Name in der Familie</th><th>Farbe</th><th>Daten aus</th><th>Reihenfolge</th></tr></thead><tbody>${aptRows}</tbody></table></div>
-        <div class="kv"><span>Fewo 1: Text des Balkens</span><input class="in" id="firmName" value="${esc(firm.name)}"></div>`)}
+`)}
+      ${sec("fewo1", "Belegungsplan Fewo 1 (Firma)", "Die Firma schickt ihren Plan als PDF. Hier wird er als Tabelle gepflegt. Änderungen wirken sofort im Kalender.", renderFirmTable())}
       ${sec("quellen", "Datenquellen", "Woher die Belegung von Fewo 2–4 kommt.", `
         <div class="kv"><span>Phase 1: Smoobu-iCal-Links</span><span>Abruf alle <select class="in" id="interval" style="width:auto">${[5,10,15,30].map(m => `<option ${cfg.interval === m ? "selected" : ""}>${m}</option>`).join("")}</select> Minuten</span></div>
         <div class="tbl"><table><thead><tr><th>Wohnung</th><th>iCal-Link</th><th>Letzter Abruf</th><th></th></tr></thead><tbody>${icalRows}</tbody></table></div>
@@ -640,7 +645,70 @@ function bindSettings() {
   document.querySelectorAll("[data-start]").forEach(b => b.onclick = () => { cfg.startView = b.dataset.start; render(); });
   document.querySelectorAll("[data-portal]").forEach(c => c.onchange = () => { const [n, id] = c.dataset.portal.split("|"); const l = cfg.portals[n]; c.checked ? l.push(+id) : l.splice(l.indexOf(+id), 1); });
   document.querySelectorAll("[data-ev]").forEach(c => c.onchange = () => { const [i, k] = c.dataset.ev.split("|"); cfg.people[+i].events[k] = c.checked; });
-  const fn = $("#firmName"); fn.oninput = () => { bookings.find(b => b.firm).name = fn.value; };
+  bindFirmTable();
+}
+
+/* Belegungsplan Fewo 1 */
+const iso = dt => `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
+const firmSel = new Set();
+let pasteOpen = false;
+function firmRows() { return bookings.filter(b => b.firm && !b.cancelled).sort((x, y) => x.arr - y.arr); }
+function renderFirmTable() {
+  const rows = firmRows();
+  const clash = b => rows.some(o => o !== b && o.arr < b.dep && o.dep > b.arr);
+  const body = rows.map(b => `<tr style="${clash(b) || b.dep <= b.arr ? "outline:2px solid var(--warn)" : ""}">
+    <td><input type="checkbox" data-fsel="${b.id}" ${firmSel.has(b.id) ? "checked" : ""} aria-label="markieren"></td>
+    <td><input class="in" type="date" data-fset="${b.id}|arr" value="${iso(b.arr)}"></td>
+    <td><input class="in" type="date" data-fset="${b.id}|dep" value="${iso(b.dep)}"></td>
+    <td>${diff(b.arr, b.dep)}</td>
+    <td><input class="in" data-fset="${b.id}|name" value="${esc(b.name)}"></td>
+    <td><input class="in" data-fset="${b.id}|note" value="${esc(b.note || "")}"></td>
+    <td><button class="mini" type="button" data-fdel="${b.id}" aria-label="Zeile löschen">✕</button></td></tr>`).join("");
+  const warn = rows.some(b => clash(b) || b.dep <= b.arr) ? `<div class="notice warn">Rot markierte Zeilen überschneiden sich oder haben kein gültiges Datum.</div>` : "";
+  return `<div class="tbl"><table><thead><tr><th></th><th>Von</th><th>Bis</th><th>Nächte</th><th>Bewohner / Bezeichnung</th><th>Notiz</th><th></th></tr></thead><tbody>${body}</tbody></table></div>${warn}
+    <div class="row">
+      <button class="mini" type="button" id="fAdd">+ Zeile</button>
+      <button class="mini" type="button" id="fPaste">Aus PDF-Text einfügen</button>
+      <button class="mini" type="button" data-fake="Später: PDF hochladen, die App liest die Zeiträume aus und zeigt sie zur Kontrolle an.">PDF hochladen …</button>
+    </div>
+    <div class="row" style="align-items:center">
+      <b>Markierte (${firmSel.size}):</b>
+      <span>verschieben um</span><input class="in" id="fShift" type="number" value="7" style="width:90px"><span>Tage</span>
+      <button class="mini" type="button" id="fShiftGo" ${firmSel.size ? "" : "disabled"}>Verschieben</button>
+      <button class="mini" type="button" id="fDelSel" ${firmSel.size ? "" : "disabled"}>Löschen</button>
+      <button class="mini" type="button" id="fAll">Alle markieren</button>
+    </div>
+    ${pasteOpen ? `<label class="f">Zeilen aus dem PDF hier einfügen, eine pro Zeitraum (z. B. „04.05.2027 – 29.05.2027 Hr. Novak“)<textarea id="fPasteText" class="in" rows="4"></textarea></label>
+      <div class="row"><button class="btn primary" type="button" id="fPasteGo">Übernehmen</button><button class="btn" type="button" id="fPasteNo">Abbrechen</button></div>` : ""}`;
+}
+function bindFirmTable() {
+  const rerender = () => { const y = window.scrollY; render(); window.scrollTo(0, y); };
+  document.querySelectorAll("[data-fsel]").forEach(c => c.onchange = () => { c.checked ? firmSel.add(+c.dataset.fsel) : firmSel.delete(+c.dataset.fsel); rerender(); });
+  document.querySelectorAll("[data-fset]").forEach(i => i.onchange = () => {
+    const [id, k] = i.dataset.fset.split("|"); const b = bookings.find(x => x.id === +id);
+    if (k === "arr" || k === "dep") { if (i.value) b[k] = D(i.value); } else b[k] = i.value;
+    rerender();
+  });
+  document.querySelectorAll("[data-fdel]").forEach(x => x.onclick = () => { const id = +x.dataset.fdel; bookings = bookings.filter(b => b.id !== id); firmSel.delete(id); rerender(); toast("Zeile gelöscht."); });
+  $("#fAdd").onclick = () => { const last = firmRows().at(-1); const a = last ? last.dep : TODAY; bookings.push({ id: uid++, apt: 1, arr: a, dep: add(a, 28), name: "Neuer Eintrag", src: "Belegungsplan Firma", firm: true, note: "" }); rerender(); };
+  $("#fPaste").onclick = () => { pasteOpen = true; rerender(); };
+  $("#fAll").onclick = () => { firmRows().forEach(b => firmSel.add(b.id)); rerender(); };
+  $("#fShiftGo").onclick = () => { const n = +$("#fShift").value || 0; bookings.filter(b => firmSel.has(b.id)).forEach(b => { b.arr = add(b.arr, n); b.dep = add(b.dep, n); }); rerender(); toast(`${firmSel.size} Einträge um ${n} Tage verschoben.`); };
+  $("#fDelSel").onclick = () => { const n = firmSel.size; bookings = bookings.filter(b => !firmSel.has(b.id)); firmSel.clear(); rerender(); toast(`${n} Einträge gelöscht.`); };
+  if (pasteOpen) {
+    $("#fPasteNo").onclick = () => { pasteOpen = false; rerender(); };
+    $("#fPasteGo").onclick = () => {
+      const re = /(\d{1,2})\.(\d{1,2})\.(\d{2,4})\s*(?:-|–|bis)\s*(\d{1,2})\.(\d{1,2})\.(\d{2,4})\s*(.*)/;
+      const yr = y => (y.length === 2 ? 2000 + +y : +y);
+      let n = 0;
+      $("#fPasteText").value.split("\n").forEach(line => {
+        const m = line.match(re); if (!m) return;
+        bookings.push({ id: uid++, apt: 1, arr: new Date(yr(m[3]), m[2] - 1, +m[1]), dep: new Date(yr(m[6]), m[5] - 1, +m[4]), name: m[7].trim() || "Firma", src: "Belegungsplan Firma", firm: true, note: "" });
+        n++;
+      });
+      pasteOpen = false; rerender(); toast(n ? `${n} Zeiträume übernommen.` : "Keine Zeiträume erkannt. Format: 04.05.2027 – 29.05.2027 Name");
+    };
+  }
 }
 
 render();

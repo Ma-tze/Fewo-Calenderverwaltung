@@ -62,7 +62,7 @@ Nutzerin: die Schwiegermutter, iPad, bisher Papierkalender. Daraus folgt für al
 Kernentscheidungen:
 
 1. **Smoobu bleibt der Master für Fewo 2–4.** Die App speichert Buchungen für diese Wohnungen nicht selbst, sondern schreibt sie über die Smoobu-API dorthin und liest sie von dort. So bleibt Smoobu mit seinen Kanälen konsistent, und nichts wird doppelt gepflegt.
-2. **Fewo 1 lebt in der App-eigenen Datenbank.** Sie hat keine Portale, also braucht sie kein Smoobu (spart ggf. Smoobu-Kosten pro Wohnung). Sie wird durchgängig von der Firma genutzt und erscheint als ein durchgehender Balken.
+2. **Fewo 1 lebt in der App-eigenen Datenbank.** Sie hat keine Portale, also braucht sie kein Smoobu (spart ggf. Smoobu-Kosten pro Wohnung). Sie wird durchgängig von der Firma genutzt; die Zeiträume aus dem Belegungsplan der Firma pflegt matze per Tabelle (siehe 4.4).
 3. **Ein Backend ist Pflicht.** Die Smoobu-API lässt sich laut Doku nicht direkt aus dem Browser aufrufen (CORS), und der API-Schlüssel darf nicht aufs iPad. Außerdem muss irgendwer den Sammel-iCal-Feed ausliefern und Webhooks empfangen.
 4. **Die App ist eine Web-App (PWA)**, die auf dem iPad als Symbol auf dem Home-Bildschirm liegt und sich wie eine App öffnet. Kein App Store, keine Updates auf dem iPad nötig.
 
@@ -125,9 +125,15 @@ Dasselbe Nachtrag-Prinzip lässt sich für jeden weiteren Kanal ohne Schnittstel
 
 ### 4.4 Fewo 1 (Firma)
 
-- Wird laut matze **durchgängig** von der Firma genutzt (bestätigt 17.11.2026). Sie bleibt deshalb außerhalb von Smoobu.
-- In der App ist sie eine eigene Zeile mit einem durchgehenden Balken „Dauermiete Firma XY“, eingetragen in der App-eigenen Datenbank. Im Alltag gibt es dort nichts zu pflegen.
-- Wird die Wohnung irgendwann doch frei vermietet, kann sie in Smoobu aufgenommen werden, und die App behandelt sie dann wie Fewo 2–4.
+- Die Firma nutzt die Wohnung durchgängig. Sie schickt dazu regelmäßig einen **Belegungsplan als PDF** (wer wohnt wann). Fewo 1 bleibt außerhalb von Smoobu.
+- Die App führt dafür einen **eigenen Kalender für Fewo 1** in der App-Datenbank. Im Kalender erscheinen die einzelnen Zeiträume als Balken, z.B. „Hr. Novak“.
+- Gepflegt wird er von matze am PC in einer **Tabellenansicht** (Einstellungen → Belegungsplan Fewo 1):
+  - Zeilen mit Von, Bis, Nächte, Bewohner/Bezeichnung, Notiz; direkt in der Tabelle änderbar.
+  - Globale Änderungen: mehrere Zeilen markieren und gemeinsam um X Tage verschieben oder löschen.
+  - „Aus PDF-Text einfügen“: Zeilen aus dem PDF kopieren und einfügen, die App erkennt Zeiträume wie „04.05.2027 – 29.05.2027 Hr. Novak“.
+  - Später optional: PDF direkt hochladen, die App liest die Zeiträume aus und zeigt sie vor dem Übernehmen zur Kontrolle an. (Hängt vom Aufbau des PDFs ab; ein Beispiel-PDF wird benötigt.)
+  - Überschneidungen und ungültige Daten werden rot markiert.
+- Die Schwiegermutter sieht Fewo 1 nur an; Änderungen laufen über matze.
 
 ## 5. Bedienkonzept für das iPad
 
@@ -222,7 +228,7 @@ Datenschutz: Gastdaten liegen in Smoobu; die App speichert nur einen Zwischenspe
 2. ~~**Kanäle in Smoobu**~~ – beantwortet: Booking.com und Airbnb sind angebunden. Die Bodensee-Portale sind nicht mit Smoobu verbunden.
 3. ~~**Portale**~~ – beantwortet: Buchungen kommen nur als Anfrage per E-Mail. Beide Portale bieten immer alle 3 Wohnungen als einen Eintrag an; „frei“, solange mindestens eine Wohnung frei ist.
 4. ~~**TouristInfo Immenstaad**~~ – beantwortet: kein iCal (neues System ca. Anfang Dezember 2026, dann neu prüfen). Über die TouristInfo kommen nur Anfragen, keine Direktbuchungen.
-5. ~~**Fewo 1**~~ – beantwortet: Die Firma nutzt die Wohnung durchgängig. Sie bleibt außerhalb von Smoobu.
+5. ~~**Fewo 1**~~ – beantwortet: durchgängig von der Firma genutzt, Belegungsplan kommt als PDF. Die App führt einen eigenen Kalender dafür, gepflegt per Tabelle am PC (siehe 4.4).
 6. ~~**Wer bekommt Nachtrag-Erinnerungen?**~~ – beantwortet: beide, matze und die Schwiegermutter, per Push über ntfy.
 7. ~~**Darf die Schwiegermutter selbst stornieren und verschieben?**~~ – beantwortet: ja, sofern es einfach bedienbar ist. matze bekommt bei jeder Stornierung/Verschiebung eine ntfy-Info.
 8. ~~**Welche Infos stehen im Papierkalender?**~~ – beantwortet: Name, Adresse, Telefonnummer, Preis, Anzahl Reisende.
@@ -236,7 +242,7 @@ Datenschutz: Gastdaten liegen in Smoobu; die App speichert nur einen Zwischenspe
 | Phase | Inhalt | Ergebnis |
 |---|---|---|
 | **0 – Klären** | offene Fragen beantworten, TouristInfo nach iCal fragen, Smoobu-API-Zugang prüfen | Entscheidungen fix |
-| **1 – Anzeige (iCal)** | Server auf homesrv liest die **Smoobu-iCal-Export-Feeds** der 3 Wohnungen (alle 10–15 Min.), Fewo 1 als fester Balken, 4-Wochen-Ansicht, Installation aufs iPad. **Keine API, kein Eintragen.** | Schwiegermutter kann die Belegung sehen, parallel zum Papierkalender (Entscheidung matze, 17.11.2026) |
+| **1 – Anzeige (iCal)** | Server auf homesrv liest die **Smoobu-iCal-Export-Feeds** der 3 Wohnungen (alle 10–15 Min.), Fewo 1 aus eigener Tabelle (Belegungsplan der Firma), 4-Wochen-Ansicht, Installation aufs iPad. **Keine API, kein Eintragen.** | Schwiegermutter kann die Belegung sehen, parallel zum Papierkalender (Entscheidung matze, 17.11.2026) |
 | **2 – Eintragen** (ab hier API nötig) | Neue Buchung, Ändern, Verschieben, Stornieren über Smoobu; Änderungsprotokoll | Papierkalender wird überflüssig |
 | **3 – Portale** | Sammel-iCal-Feed für beide Bodensee-Portale, Kontrolle der Portal-Feeds, Nachtrag-Liste + E-Mail für TouristInfo | Doppelbuchungen werden praktisch ausgeschlossen |
 | **4 – Planung & Druck** | 3-Monats- und Jahresansicht, PDF-Monatsexport | vollständiger Funktionsumfang |
