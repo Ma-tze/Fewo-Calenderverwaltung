@@ -236,11 +236,16 @@ Datenschutz: Gastdaten liegen in Smoobu; die App speichert nur einen Zwischenspe
 | Phase | Inhalt | Ergebnis |
 |---|---|---|
 | **0 – Klären** | offene Fragen beantworten, TouristInfo nach iCal fragen, Smoobu-API-Zugang prüfen | Entscheidungen fix |
-| **1 – Lesen** | Server + Smoobu-Anbindung (nur lesen), Fewo 4 in eigener DB, 4-Wochen-Ansicht, Installation aufs iPad | Schwiegermutter kann die Belegung sehen, parallel zum Papierkalender |
-| **2 – Eintragen** | Neue Buchung, Ändern, Verschieben, Stornieren über Smoobu; Änderungsprotokoll | Papierkalender wird überflüssig |
+| **1 – Anzeige (iCal)** | Server auf homesrv liest die **Smoobu-iCal-Export-Feeds** der 3 Wohnungen (alle 10–15 Min.), Fewo 4 als fester Balken, 4-Wochen-Ansicht, Installation aufs iPad. **Keine API, kein Eintragen.** | Schwiegermutter kann die Belegung sehen, parallel zum Papierkalender (Entscheidung matze, 17.11.2026) |
+| **2 – Eintragen** (ab hier API nötig) | Neue Buchung, Ändern, Verschieben, Stornieren über Smoobu; Änderungsprotokoll | Papierkalender wird überflüssig |
 | **3 – Portale** | Sammel-iCal-Feed für beide Bodensee-Portale, Kontrolle der Portal-Feeds, Nachtrag-Liste + E-Mail für TouristInfo | Doppelbuchungen werden praktisch ausgeschlossen |
 | **4 – Planung & Druck** | 3-Monats- und Jahresansicht, PDF-Monatsexport | vollständiger Funktionsumfang |
 | **5 – Feinschliff** | Rückmeldungen der Schwiegermutter einarbeiten, Schriftgröße, Farben, Push-Nachrichten | Alltagstauglich |
+
+Hinweise zu Phase 1 (nur iCal):
+- Was im Kalender steht, hängt davon ab, was Smoobu in den Export-Feed schreibt. Oft ist das nur „belegt“ oder ein kurzer Titel, ohne Telefon, Adresse, Preis und Reisende. Das prüfen wir als Erstes mit den echten Feeds. Die Buchungskarte zeigt in Phase 1 nur, was der Feed hergibt.
+- Die iCal-Links enthalten einen geheimen Teil. Sie werden nur auf dem Server hinterlegt, nicht im Repository.
+- Der Server muss in Phase 1 nur für das iPad erreichbar sein, noch nicht für Smoobu oder die Portale.
 
 Empfehlung: nach Phase 1 und nach Phase 2 je eine Woche mit der Schwiegermutter testen, bevor es weitergeht. Der Papierkalender bleibt bis Ende Phase 2 parallel in Gebrauch.
 
