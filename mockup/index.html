@@ -8,6 +8,7 @@
   --accent: #1d6a86; --accent-fg: #ffffff; --today: #c2410c; --warn: #b42318; --ok: #1e7a46;
   --a1: #5b6878; --a2: #2a72b0; --a3: #2b7d4c; --a4: #a0560f; --bar-fg: #ffffff;
   --weekend: #f5f1e8;
+  --p1: #5b6878; --p2: #2a72b0; --p3: #2b7d4c; --p4: #a0560f; --p5: #7046a8; --p6: #0f7479; --p7: #a33a33; --p8: #66721a;
   --font-body: "Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif;
   --font-head: "Lexend", "Atkinson Hyperlegible", system-ui, sans-serif;
 }
@@ -15,14 +16,18 @@
   --bg: #111816; --surface: #19221f; --fg: #e9efec; --muted: #a8b5af; --line: #2d3a35; --soft: #222d29;
   --accent: #5cb2d2; --accent-fg: #0d1a1f; --today: #fb8a4c; --warn: #f97066; --ok: #5bc48a;
   --a1: #657386; --a2: #2f7cc0; --a3: #2f8a55; --a4: #ad6216; --bar-fg: #ffffff; --weekend: #1f2622;
+  --p1: #657386; --p2: #2f7cc0; --p3: #2f8a55; --p4: #ad6216; --p5: #7e55b8; --p6: #16828a; --p7: #b2463e; --p8: #74811f;
   color-scheme: dark } }
 :root[data-theme="dark"] {
   --bg: #111816; --surface: #19221f; --fg: #e9efec; --muted: #a8b5af; --line: #2d3a35; --soft: #222d29;
   --accent: #5cb2d2; --accent-fg: #0d1a1f; --today: #fb8a4c; --warn: #f97066; --ok: #5bc48a;
   --a1: #657386; --a2: #2f7cc0; --a3: #2f8a55; --a4: #ad6216; --bar-fg: #ffffff; --weekend: #1f2622;
+  --p1: #657386; --p2: #2f7cc0; --p3: #2f8a55; --p4: #ad6216; --p5: #7e55b8; --p6: #16828a; --p7: #b2463e; --p8: #74811f;
   color-scheme: dark }
 
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
+.mini[disabled] { opacity: .35; cursor: not-allowed; }
 html, body { height: 100%; }
 body { background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 19px; line-height: 1.4;
   padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 16px 0; }
@@ -128,6 +133,35 @@ label.f input, label.f textarea { font: inherit; font-weight: 400; font-size: 21
 .toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(100px + env(safe-area-inset-bottom, 0px)); z-index: 60; background: var(--fg); color: var(--bg); border-radius: 14px; padding: 14px 20px; font-weight: 700; display: flex; gap: 16px; align-items: center; max-width: calc(100% - 32px); }
 .toast button { background: transparent; border: 2px solid var(--bg); color: var(--bg); border-radius: 10px; padding: 6px 14px; font-weight: 700; }
 
+/* Einstellungen (PC) */
+.settings { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 20px; align-items: start; font-size: 16px; }
+.snav { position: sticky; top: 16px; display: flex; flex-direction: column; gap: 4px; }
+.snav a { color: var(--fg); text-decoration: none; padding: 8px 12px; border-radius: 8px; }
+.snav a:hover { background: var(--soft); }
+.sbody { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+.sec { background: var(--surface); border: 2px solid var(--line); border-radius: 14px; padding: 18px 20px; display: flex; flex-direction: column; gap: 14px; scroll-margin-top: 16px; }
+.sec h3 { margin: 0; font-family: var(--font-head); font-size: 21px; font-weight: 500; }
+.sec p.d { margin: 0; color: var(--muted); }
+.tbl { overflow-x: auto; }
+.tbl table { border-collapse: collapse; width: 100%; min-width: 640px; }
+.tbl th { text-align: left; font-size: 14px; color: var(--muted); font-weight: 700; padding: 6px 8px; border-bottom: 2px solid var(--line); }
+.tbl td { padding: 8px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+.in { font: inherit; padding: 8px 10px; border: 2px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--fg); width: 100%; min-width: 0; }
+.swatches { display: flex; gap: 6px; flex-wrap: wrap; }
+.sw { width: 28px; height: 28px; border-radius: 8px; border: 3px solid transparent; padding: 0; }
+.sw[aria-pressed="true"] { border-color: var(--fg); }
+.mini { min-height: 36px; padding: 0 12px; border-radius: 8px; border: 2px solid var(--line); background: var(--surface); font-weight: 700; font-size: 15px; }
+.kv { display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 10px 16px; align-items: center; }
+.kv > span:nth-child(odd) { color: var(--muted); }
+.mono { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 14px; overflow-wrap: anywhere; }
+.badge { display: inline-block; border-radius: 999px; padding: 2px 10px; font-size: 14px; font-weight: 700; border: 2px solid currentColor; }
+.badge.ok { color: var(--ok); } .badge.off { color: var(--muted); } .badge.phase { color: var(--accent); }
+.tog { display: inline-flex; align-items: center; gap: 10px; }
+.tog input { width: 22px; height: 22px; accent-color: var(--accent); }
+.log li { padding: 4px 0; border-bottom: 1px solid var(--soft); }
+.log { margin: 0; padding-left: 18px; }
+@media (max-width: 860px) { .settings { grid-template-columns: 1fr; } .snav { position: static; flex-direction: row; flex-wrap: wrap; } .kv { grid-template-columns: 1fr; } }
+
 @media (max-width: 700px) {
   body { font-size: 17px; }
   nav.dock { grid-template-columns: repeat(2, 1fr); }
@@ -147,11 +181,12 @@ label.f input, label.f textarea { font: inherit; font-weight: 400; font-size: 21
     </div>
     <div class="top-actions">
       <button class="chip" id="pdfBtn" type="button">Monat als PDF</button>
+      <button class="chip" id="setBtn" type="button">⚙ Einstellungen</button>
       <button class="chip alert" id="taskBtn" type="button"></button>
     </div>
   </header>
 
-  <div class="toolbar">
+  <div class="toolbar" id="toolbar">
     <h2 id="rangeTitle"></h2>
     <div class="arrows">
       <button class="btn" id="prevBtn" type="button">◀ früher</button>
@@ -163,7 +198,7 @@ label.f input, label.f textarea { font: inherit; font-weight: 400; font-size: 21
   <main id="view"></main>
   <div class="legend" id="legend"></div>
 
-  <nav class="dock" aria-label="Ansicht wählen">
+  <nav class="dock" id="dock" aria-label="Ansicht wählen">
     <button type="button" data-nav="today">Heute</button>
     <button type="button" data-nav="w4">4 Wochen</button>
     <button type="button" data-nav="m3">3 Monate</button>
@@ -182,10 +217,10 @@ const WD = ["So","Mo","Di","Mi","Do","Fr","Sa"];
 const WDL = ["Sonntag","Montag","Dienstag","Mittwoch","Donnerstag","Freitag","Samstag"];
 
 const APTS = [
-  { id: 1, name: "Fewo 1", nick: "Firma", color: "var(--a1)", smoobu: false },
-  { id: 2, name: "Fewo 2", nick: "Seeblick", color: "var(--a2)", smoobu: true },
-  { id: 3, name: "Fewo 3", nick: "Garten", color: "var(--a3)", smoobu: true },
-  { id: 4, name: "Fewo 4", nick: "Wiese", color: "var(--a4)", smoobu: true },
+  { id: 1, name: "Fewo 1", nick: "Firma", color: "var(--p1)", smoobu: false },
+  { id: 2, name: "Fewo 2", nick: "Seeblick", color: "var(--p2)", smoobu: true },
+  { id: 3, name: "Fewo 3", nick: "Garten", color: "var(--p3)", smoobu: true },
+  { id: 4, name: "Fewo 4", nick: "Wiese", color: "var(--p4)", smoobu: true },
 ];
 const SOURCES = ["Telefon / E-Mail", "FeWo-Bodensee", "Bodenseeurlaub", "TouristInfo"];
 const READONLY = ["Booking.com", "Airbnb"];
@@ -315,6 +350,10 @@ function renderYear() {
 function render() {
   renderTop();
   const v = $("#view"), prev = $("#prevBtn"), next = $("#nextBtn");
+  const set = state.view === "settings";
+  $("#toolbar").hidden = set; $("#summary").hidden = set; $("#legend").hidden = set; $("#dock").hidden = set;
+  $("#setBtn").textContent = set ? "◀ Zurück zum Kalender" : "⚙ Einstellungen";
+  if (set) { v.innerHTML = renderSettings(); bindSettings(); return; }
   if (state.view === "w4") {
     const end = add(state.start, 27);
     $("#rangeTitle").textContent = `4 Wochen: ${fy(state.start)} bis ${fy(end)}`;
@@ -365,6 +404,7 @@ document.addEventListener("click", e => {
 
 $("#pdfBtn").onclick = () => toast("Erstellt ein PDF des Monats (A4 quer). Im Mockup nicht aktiv.");
 $("#taskBtn").onclick = openTasks;
+$("#setBtn").onclick = () => { state.view = state.view === "settings" ? "w4" : "settings"; render(); window.scrollTo(0, 0); };
 
 function overlay(html) {
   $("#overlayRoot").innerHTML = `<div class="overlay" id="ov"><div class="sheet" role="dialog" aria-modal="true">${html}</div></div>`;
@@ -518,6 +558,89 @@ function drawWizard(w) {
       drawWizard(w);
     });
   }
+}
+
+/* Einstellungen */
+const PALETTE = ["--p1","--p2","--p3","--p4","--p5","--p6","--p7","--p8"];
+const cfg = {
+  interval: 15, ntfyServer: "https://ntfy.sh",
+  people: [
+    { who: "matze", role: "Verwaltung", device: "PC + Handy", topic: "fewo-m-7f3k…", events: { nachtrag: true, storno: true, neu: true } },
+    { who: "Schwiegermutter", role: "Kalender", device: "iPad", topic: "fewo-s-2q9x…", events: { nachtrag: true, storno: false, neu: false } },
+  ],
+  remind: 24, mail: true, font: "groß", startView: "4 Wochen",
+  touristNachtrag: true, portals: { "FeWo-Bodensee": [2,3,4], "Bodenseeurlaub": [2,3,4] },
+};
+function renderSettings() {
+  const sec = (id, title, desc, inner) => `<section class="sec" id="s-${id}"><h3>${title}</h3>${desc ? `<p class="d">${desc}</p>` : ""}${inner}</section>`;
+  const aptRows = APTS.map((a, i) => `<tr>
+    <td><b>${a.name}</b></td>
+    <td><input class="in" id="nick-${a.id}" value="${esc(a.nick)}" aria-label="Name ${a.name}"></td>
+    <td><div class="swatches">${PALETTE.map(p => `<button type="button" class="sw" style="background:var(${p})" data-color="${a.id}|${p}" aria-pressed="${a.color === `var(${p})`}" aria-label="Farbe"></button>`).join("")}</div></td>
+    <td>${a.smoobu ? `<span class="badge ok">Smoobu</span>` : `<span class="badge off">nur App</span>`}</td>
+    <td><button class="mini" type="button" data-move="${i}|-1" ${i === 0 ? "disabled" : ""}>▲</button> <button class="mini" type="button" data-move="${i}|1" ${i === APTS.length - 1 ? "disabled" : ""}>▼</button></td>
+  </tr>`).join("");
+  const firm = bookings.find(b => b.firm);
+  const icalRows = APTS.filter(a => a.smoobu).map(a => `<tr><td><b>${a.name}</b> ${esc(a.nick)}</td><td><span class="badge ok">hinterlegt</span></td><td>vor 4 Min.</td><td><button class="mini" type="button" data-fake="Der neue Link wird nur auf dem Server gespeichert.">Link ändern</button></td></tr>`).join("");
+  const portalRows = Object.entries(cfg.portals).map(([name, ids]) => `<tr><td><b>${name}</b></td>
+    <td>${APTS.filter(a => a.smoobu).map(a => `<label class="tog"><input type="checkbox" data-portal="${name}|${a.id}" ${ids.includes(a.id) ? "checked" : ""}>${a.name}</label>`).join(" &nbsp; ")}</td>
+    <td class="mono">https://kalender.&lt;domain&gt;/ical/${name === "FeWo-Bodensee" ? "fwb" : "bu"}-•••••.ics</td>
+    <td><button class="mini" type="button" data-fake="Link kopiert. Diesen Link beim Portal als Import-Kalender eintragen.">Kopieren</button></td></tr>`).join("");
+  const peopleRows = cfg.people.map((p, i) => `<tr><td><b>${p.who}</b><br><small>${p.device}</small></td><td class="mono">${p.topic}</td>
+    <td><label class="tog"><input type="checkbox" data-ev="${i}|nachtrag" ${p.events.nachtrag ? "checked" : ""}>Nachträge</label></td>
+    <td><label class="tog"><input type="checkbox" data-ev="${i}|neu" ${p.events.neu ? "checked" : ""}>Neue Buchung</label></td>
+    <td><label class="tog"><input type="checkbox" data-ev="${i}|storno" ${p.events.storno ? "checked" : ""}>Storno / Verschieben</label></td>
+    <td><button class="mini" type="button" data-fake="Testnachricht an ${p.who} gesendet.">Test senden</button></td></tr>`).join("");
+  return `<div class="settings">
+    <nav class="snav" aria-label="Bereiche">
+      <a href="#s-wohnungen">Wohnungen</a><a href="#s-quellen">Datenquellen</a><a href="#s-portale">Portale</a>
+      <a href="#s-benachrichtigungen">Benachrichtigungen</a><a href="#s-zugaenge">Zugänge &amp; Geräte</a><a href="#s-anzeige">Anzeige &amp; PDF</a><a href="#s-protokoll">Protokoll</a>
+    </nav>
+    <div class="sbody">
+      <div class="hint">Nur für die Verwaltung, gedacht für den PC. Auf dem iPad der Schwiegermutter ist diese Seite nicht sichtbar. Änderungen an Name und Farbe wirken im Mockup sofort im Kalender.</div>
+      ${sec("wohnungen", "Wohnungen", "Name, Farbe und Reihenfolge, wie sie im Kalender erscheinen.", `<div class="tbl"><table><thead><tr><th>Nr.</th><th>Name in der Familie</th><th>Farbe</th><th>Daten aus</th><th>Reihenfolge</th></tr></thead><tbody>${aptRows}</tbody></table></div>
+        <div class="kv"><span>Fewo 1: Text des Balkens</span><input class="in" id="firmName" value="${esc(firm.name)}"></div>`)}
+      ${sec("quellen", "Datenquellen", "Woher die Belegung von Fewo 2–4 kommt.", `
+        <div class="kv"><span>Phase 1: Smoobu-iCal-Links</span><span>Abruf alle <select class="in" id="interval" style="width:auto">${[5,10,15,30].map(m => `<option ${cfg.interval === m ? "selected" : ""}>${m}</option>`).join("")}</select> Minuten</span></div>
+        <div class="tbl"><table><thead><tr><th>Wohnung</th><th>iCal-Link</th><th>Letzter Abruf</th><th></th></tr></thead><tbody>${icalRows}</tbody></table></div>
+        <div class="kv"><span>Phase 2: Smoobu-Schnittstelle (API)</span><span><span class="badge off">nicht verbunden</span> &nbsp;<button class="mini" type="button" data-fake="Der API-Schlüssel wird nur auf dem Server hinterlegt, nie im Browser.">Verbinden …</button></span></div>`)}
+      ${sec("portale", "Portale", "Sammel-Kalender für Portale, die alle Wohnungen als einen Eintrag führen. „Belegt“ wird gemeldet, wenn alle angehakten Wohnungen belegt sind.", `
+        <div class="tbl"><table><thead><tr><th>Portal</th><th>Zählt mit</th><th>Import-Link für das Portal</th><th></th></tr></thead><tbody>${portalRows}</tbody></table></div>
+        <div class="kv"><span>TouristInfo Immenstaad</span><label class="tog"><input type="checkbox" id="touristNachtrag" ${cfg.touristNachtrag ? "checked" : ""}>Nachtrag von Hand nötig (kein iCal)</label>
+        <span>Link zum Portal</span><input class="in" value="https://… (Zugang TouristInfo)"></div>`)}
+      ${sec("benachrichtigungen", "Benachrichtigungen", "Push über ntfy. Jede Person abonniert ihr eigenes Thema in der ntfy-App.", `
+        <div class="kv"><span>ntfy-Server</span><input class="in" id="ntfyServer" value="${esc(cfg.ntfyServer)}"></div>
+        <div class="tbl"><table><thead><tr><th>Person</th><th>Thema</th><th colspan="3">Nachricht bei</th><th></th></tr></thead><tbody>${peopleRows}</tbody></table></div>
+        <div class="kv"><span>Zweite Erinnerung nach</span><span><select class="in" id="remind" style="width:auto">${[12,24,48].map(h => `<option ${cfg.remind === h ? "selected" : ""}>${h}</option>`).join("")}</select> Stunden, wenn ein Nachtrag offen ist</span>
+        <span>E-Mail als Rückfall</span><label class="tog"><input type="checkbox" ${cfg.mail ? "checked" : ""}>zusätzlich per E-Mail an matze</label></div>`)}
+      ${sec("zugaenge", "Zugänge & Geräte", "Wer die App nutzen darf. Das iPad bleibt dauerhaft angemeldet.", `
+        <div class="tbl"><table><thead><tr><th>Gerät</th><th>Person</th><th>Rolle</th><th>Zuletzt aktiv</th><th></th></tr></thead><tbody>
+          <tr><td>iPad</td><td>Schwiegermutter</td><td>Kalender (ansehen, eintragen, ändern)</td><td>heute 12:31</td><td><button class="mini" type="button" data-fake="Gerät abgemeldet (Mockup).">Abmelden</button></td></tr>
+          <tr><td>PC</td><td>matze</td><td>Verwaltung (alles)</td><td>gerade eben</td><td></td></tr>
+          <tr><td>Handy</td><td>matze</td><td>Verwaltung (alles)</td><td>gestern</td><td><button class="mini" type="button" data-fake="Gerät abgemeldet (Mockup).">Abmelden</button></td></tr>
+        </tbody></table></div>
+        <div class="row"><button class="btn" type="button" data-fake="Einrichtungs-Link erzeugt. Er gilt 24 Stunden und nur für ein Gerät.">Neues Gerät hinzufügen</button><button class="btn" type="button" data-fake="PIN geändert (Mockup).">PIN ändern</button></div>`)}
+      ${sec("anzeige", "Anzeige & PDF", "", `
+        <div class="kv"><span>Schriftgröße auf dem iPad</span><span class="row">${["normal","groß","sehr groß"].map(x => `<button type="button" class="mini" data-font="${x}" aria-pressed="${cfg.font === x}" style="${cfg.font === x ? "border-color:var(--accent)" : ""}">${x}</button>`).join("")}</span>
+        <span>Startansicht</span><span class="row">${["4 Wochen","3 Monate"].map(x => `<button type="button" class="mini" data-start="${x}" style="${cfg.startView === x ? "border-color:var(--accent)" : ""}">${x}</button>`).join("")}</span>
+        <span>PDF-Varianten</span><span><label class="tog"><input type="checkbox" checked>Vollständig (mit Adresse, Telefon, Preis)</label><br><label class="tog"><input type="checkbox" checked>Zum Aushängen (nur Namen)</label></span></div>`)}
+      ${sec("protokoll", "Protokoll", "Die letzten Änderungen.", `<ul class="log">
+        <li>17.11. 11:58 · Schwiegermutter · Neue Buchung Schmidt, Fewo 3, 18.–29.11.</li>
+        <li>17.11. 11:59 · System · Nachtrag TouristInfo angelegt, Push an beide gesendet</li>
+        <li>16.11. 18:20 · System · Smoobu: neue Buchung Familie Schulz über Booking.com</li>
+        <li>15.11. 09:05 · matze · Farbe von Fewo 4 geändert</li></ul>`)}
+    </div></div>`;
+}
+function bindSettings() {
+  APTS.forEach(a => { const el = $("#nick-" + a.id); if (el) el.oninput = () => { a.nick = el.value; }; });
+  document.querySelectorAll("[data-color]").forEach(b => b.onclick = () => { const [id, p] = b.dataset.color.split("|"); aptOf(+id).color = `var(${p})`; render(); });
+  document.querySelectorAll("[data-move]").forEach(b => b.onclick = () => { const [i, d] = b.dataset.move.split("|").map(Number); [APTS[i], APTS[i + d]] = [APTS[i + d], APTS[i]]; render(); });
+  document.querySelectorAll("[data-fake]").forEach(b => b.onclick = () => toast(b.dataset.fake));
+  document.querySelectorAll("[data-font]").forEach(b => b.onclick = () => { cfg.font = b.dataset.font; render(); });
+  document.querySelectorAll("[data-start]").forEach(b => b.onclick = () => { cfg.startView = b.dataset.start; render(); });
+  document.querySelectorAll("[data-portal]").forEach(c => c.onchange = () => { const [n, id] = c.dataset.portal.split("|"); const l = cfg.portals[n]; c.checked ? l.push(+id) : l.splice(l.indexOf(+id), 1); });
+  document.querySelectorAll("[data-ev]").forEach(c => c.onchange = () => { const [i, k] = c.dataset.ev.split("|"); cfg.people[+i].events[k] = c.checked; });
+  const fn = $("#firmName"); fn.oninput = () => { bookings.find(b => b.firm).name = fn.value; };
 }
 
 render();
