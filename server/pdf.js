@@ -25,7 +25,15 @@ function rgb(hex) {
 
 export class PdfDoc {
   constructor({ width = 842, height = 595 } = {}) {
-    this.W = width; this.H = height; this.pages = []; this.newPage();
+    this.W = width; this.H = height; this.pages = []; this.images = []; this.newPage();
+  }
+  // Bild (aus image.js loadImage) in ein Feld einpassen, Seitenverhältnis bleibt; liefert die tatsächliche Größe
+  image(img, x, y, maxW, maxH) {
+    const sc = Math.min(maxW / img.w, maxH / img.h), w = img.w * sc, h = img.h * sc;
+    let k = this.images.indexOf(img);
+    if (k < 0) { this.images.push(img); k = this.images.length - 1; }
+    this.cur.push(`q ${n(w)} 0 0 ${n(h)} ${n(x)} ${n(this.#y(y + h))} cm /Im${k + 1} Do Q`);
+    return { w, h };
   }
   newPage() { this.cur = []; this.pages.push(this.cur); return this; }
   #y(y) { return this.H - y; }
@@ -51,12 +59,20 @@ export class PdfDoc {
     const catalog = add(null), pagesId = add(null);
     const f1 = add('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>');
     const f2 = add('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>');
+    // Bilder als XObjects; Transparenz von PNG über eine Graustufen-Maske (SMask)
+    const imgIds = this.images.map(im => {
+      const bin = d => d.toString('latin1');
+      if (im.kind === 'jpeg') return add(`<< /Type /XObject /Subtype /Image /Width ${im.w} /Height ${im.h} /ColorSpace /${im.comps === 1 ? 'DeviceGray' : 'DeviceRGB'} /BitsPerComponent 8 /Filter /DCTDecode /Length ${im.data.length} >>\nstream\n${bin(im.data)}\nendstream`);
+      const sm = im.alpha ? add(`<< /Type /XObject /Subtype /Image /Width ${im.w} /Height ${im.h} /ColorSpace /DeviceGray /BitsPerComponent 8 /Filter /FlateDecode /Length ${im.alpha.length} >>\nstream\n${bin(im.alpha)}\nendstream`) : 0;
+      return add(`<< /Type /XObject /Subtype /Image /Width ${im.w} /Height ${im.h} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /FlateDecode${sm ? ` /SMask ${sm} 0 R` : ''} /Length ${im.data.length} >>\nstream\n${bin(im.data)}\nendstream`);
+    });
+    const xobj = imgIds.length ? ` /XObject << ${imgIds.map((id, i) => `/Im${i + 1} ${id} 0 R`).join(' ')} >>` : '';
     const kids = [];
     for (const ops of this.pages) {
       const stream = ops.join('\n');
       const len = Buffer.byteLength(stream, 'latin1');
       const c = add(`<< /Length ${len} >>\nstream\n${stream}\nendstream`);
-      kids.push(add(`<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 ${this.W} ${this.H}] /Resources << /Font << /F1 ${f1} 0 R /F2 ${f2} 0 R >> >> /Contents ${c} 0 R >>`));
+      kids.push(add(`<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 ${this.W} ${this.H}] /Resources << /Font << /F1 ${f1} 0 R /F2 ${f2} 0 R >>${xobj} >> /Contents ${c} 0 R >>`));
     }
     const specs = files.map(f => {
       const data = Buffer.isBuffer(f.data) ? f.data : Buffer.from(f.data, 'utf8');

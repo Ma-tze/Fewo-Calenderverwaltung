@@ -209,3 +209,15 @@ test('Testbetrieb: eigener TEST-Nummernkreis, zählt nur im Testbetrieb im USt-B
   assert.ok(I.vatReport(d, per, '2026-07-01', { includeTest: true }).rows.length > 0);
   assert.ok(I.invoicePdf(inv).buffer.length > 1000);
 });
+
+test('Logo: PNG mit Transparenz und JPG werden ins PDF eingebettet', async () => {
+  const fs = await import('node:fs');
+  const { loadImage } = await import('../server/image.js');
+  const img = loadImage(fs.readFileSync(new URL('../server/assets/logo-default.png', import.meta.url)));
+  assert.deepEqual([img.kind, img.w, img.h], ['raw', 577, 404]);
+  const { inv } = setup();
+  const pdf = I.invoicePdf(inv, { draftSettings: I.DEFAULT_SETTINGS(), logo: img }).buffer.toString('latin1');
+  assert.match(pdf, /\/Subtype \/Image \/Width 577 \/Height 404/);
+  assert.match(pdf, /\/Im1 Do/);
+  assert.throws(() => loadImage(Buffer.from('GIF89a')), /PNG- oder JPG/);
+});

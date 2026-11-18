@@ -24,7 +24,7 @@ const num = v => {
 
 export const DEFAULT_SETTINGS = () => ({
   seller: { name: '', street: '', zip: '', city: '', country: 'DE', phone: '', email: '', taxNumber: '', vatId: '', iban: '', bic: '', bank: '', accountHolder: '' },
-  numberPrefix: 'R', counters: {}, paymentDays: 14, vatRate: 7, taxation: 'ist', footer: '',
+  numberPrefix: 'R', counters: {}, logo: { enabled: false, file: '', name: '' }, paymentDays: 14, vatRate: 7, taxation: 'ist', footer: '',
   payment: { depositPercent: 0, depositDays: 7, depositIfDaysAhead: 30, restDaysBeforeArrival: 14 },
   pricing: { includedPersons: 2, extraAdult: 0, extraChild: 0, childMaxAge: 15, infantMaxAge: 2, cleaning: 0 },
   // Vorbelegung nach Kurtaxesatzung Immenstaad (6. Änderung, ab 01.01.2026)
@@ -42,7 +42,7 @@ export function ensure(d) {
   const def = DEFAULT_SETTINGS();
   const cur = d.invoiceSettings || {};
   d.invoiceSettings = { ...def, ...cur, seller: { ...def.seller, ...(cur.seller || {}) }, payment: { ...def.payment, ...(cur.payment || {}) }, pricing: { ...def.pricing, ...(cur.pricing || {}) },
-    kurtaxe: { ...def.kurtaxe, ...(cur.kurtaxe || {}) }, counters: { ...(cur.counters || {}) } };
+    kurtaxe: { ...def.kurtaxe, ...(cur.kurtaxe || {}) }, logo: { ...def.logo, ...(cur.logo || {}) }, counters: { ...(cur.counters || {}) } };
   // alte, nie ausgefüllte Vorbelegung (alle Sätze 0) durch die Immenstaader Sätze ersetzen
   const K = d.invoiceSettings.kurtaxe;
   if (!K.groups?.length || K.groups.every(g => !g.rate && !g.rateNeben)) K.groups = IMMENSTAAD_KT();
@@ -68,6 +68,7 @@ export function cleanSettings(b, prev) {
   if (b.vatRate !== undefined) { const n = num(b.vatRate); if (![7, 19, 0].includes(n)) throw new Error('Steuersatz bitte 7, 19 oder 0'); out.vatRate = n; }
   if (b.taxation !== undefined) { if (!['ist', 'soll'].includes(b.taxation)) throw new Error('Versteuerung ungültig'); out.taxation = b.taxation; }
   if (b.footer !== undefined) out.footer = s(b.footer, 500);
+  if (b.logo && b.logo.enabled !== undefined) out.logo.enabled = !!b.logo.enabled && !!out.logo.file;
   if (b.nextNumber !== undefined) {
     const { year, value } = b.nextNumber; const v = Math.trunc(num(value));
     if (!Number.isInteger(year) || !(v >= 1 && v < 1e6)) throw new Error('Nummer ungültig');
@@ -445,15 +446,18 @@ function wrap(text, width, size) {
   return out;
 }
 
-export function invoicePdf(inv, { draftSettings = null, xml = null } = {}) {
+export function invoicePdf(inv, { draftSettings = null, xml = null, logo = null } = {}) {
   const draft = inv.status === 'entwurf';
   const sl = draft ? draftSettings.seller : inv.seller;
   const t = draft ? totals(inv.items, inv.deposit) : inv.totals;
   const doc = new PdfDoc({ width: 595, height: 842 });
   const L = 56, R = 539, MUTED = '#5f6863', LINE = '#c9d0cc';
   const title = inv.kind === 'storno' ? 'Stornorechnung' : 'Rechnung';
-  if (draft) doc.text(L, 30, 'ENTWURF – keine gültige Rechnung', { size: 11, bold: true, color: '#b03a2e' });
-  else if (inv.test) doc.text(L, 30, 'TESTRECHNUNG – nur zur Probe, keine gültige Rechnung', { size: 11, bold: true, color: '#b03a2e' });
+  // Logo oben links über dem Anschriftfeld; der Entwurfs-/Testvermerk rückt dann nach rechts
+  if (logo) doc.image(logo, L, 24, 170, 96);
+  const markX = logo ? 340 : L;
+  if (draft) doc.text(markX, 30, logo ? 'ENTWURF – keine gültige Rechnung' : 'ENTWURF – keine gültige Rechnung', { size: logo ? 9 : 11, bold: true, color: '#b03a2e' });
+  else if (inv.test) doc.text(markX, 30, logo ? 'TESTRECHNUNG – keine gültige Rechnung' : 'TESTRECHNUNG – nur zur Probe, keine gültige Rechnung', { size: logo ? 9 : 11, bold: true, color: '#b03a2e' });
   // Absender
   const sender = [sl.name, sl.street, `${sl.zip} ${sl.city}`].filter(x => x.trim()).join(' · ');
   doc.text(L, 132, sender, { size: 7, color: MUTED });

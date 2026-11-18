@@ -774,6 +774,15 @@
           ${f('phone', 'Telefon')}${f('email', 'E-Mail')}${f('taxNumber', 'Steuernummer', 'data-sl', sl.taxNumber, false, 'z. B. 61/123/45678')}${f('vatId', 'USt-IdNr. (falls vorhanden)', 'data-sl', sl.vatId, false, 'DE…')}
           ${f('bank', 'Bank')}${f('iban', 'IBAN')}${f('bic', 'BIC')}${f('accountHolder', 'Kontoinhaber')}</div>
       </section>
+      <section class="sec"><h3>Logo auf der Rechnung</h3>
+        <div class="row" style="align-items:center;gap:20px">
+          ${S.logo.file ? `<img src="/api/admin/invoice-logo?v=${encodeURIComponent(S.logo.file)}" alt="Logo" style="max-width:220px;max-height:130px;border:1px solid #ccd3cf;border-radius:8px;padding:6px;background:#fff">` : '<span class="small">Noch kein Logo hinterlegt.</span>'}
+          <div style="display:flex;flex-direction:column;gap:10px">
+            ${S.logo.file ? `<label style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" id="logoOn" ${S.logo.enabled ? 'checked' : ''}> Logo auf Rechnungen anzeigen</label>` : ''}
+            <label class="mini" style="cursor:pointer;align-self:flex-start">${S.logo.file ? 'Andere Datei wählen …' : 'Logo-Datei wählen …'}<input type="file" id="logoFile" accept="image/png,image/jpeg" style="display:none"></label>
+            <span class="small">PNG oder JPG, bis 4 MB. Steht oben links auf jeder neuen Rechnung. Festgeschriebene Rechnungen behalten ihr damaliges Aussehen.</span>
+          </div></div>
+      </section>
       <section class="sec"><h3>Rechnungsnummern und Steuer</h3>
         <div class="gform">
           <label>Präfix<input class="in" data-iv="numberPrefix" value="${esc(S.numberPrefix)}"></label>
@@ -943,6 +952,14 @@
       $$('[data-iv]').forEach(i => i.onchange = () => save({ [i.dataset.iv]: i.value }));
       $$('[data-pr]').forEach(i => i.onchange = () => save({ pricing: { [i.dataset.pr]: i.value } }));
       $$('[data-pay]').forEach(i => i.onchange = () => save({ payment: { [i.dataset.pay]: i.value } }));
+      if ($('#logoOn')) $('#logoOn').onchange = e => save({ logo: { enabled: e.target.checked } });
+      $('#logoFile').onchange = e => {
+        const f = e.target.files[0]; if (!f) return;
+        if (f.size > 4e6) { toast('Die Datei ist größer als 4 MB.'); return; }
+        const r = new FileReader();
+        r.onload = () => iAct(() => post('/api/admin/invoice-logo', { name: f.name, data: r.result }), 'Logo gespeichert.');
+        r.readAsDataURL(f);
+      };
       $('#ivNext').onchange = e => save({ nextNumber: { year: new Date().getFullYear(), value: e.target.value } });
       $('#ktLabel').onchange = e => save({ kurtaxe: { label: e.target.value } });
       $$('[data-ktm]').forEach(i => i.onchange = () => save({ kurtaxe: { [i.dataset.ktm]: i.value } }));

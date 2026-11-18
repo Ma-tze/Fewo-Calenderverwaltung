@@ -18,6 +18,7 @@ import { fetchHolidays, expandSeasons, copySeasons } from './holidays.js';
 import { smoobuConfigured, smoobuAuthMode, listApartments as smoobuApartments, fetchReservations } from './smoobu.js';
 import * as G from './guests.js';
 import * as INV from './invoices.js';
+import { loadImage } from './image.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC = path.join(__dirname, '..', 'public');
@@ -195,10 +196,10 @@ function pdfToText(buf) {
   });
 }
 
-function readJson(req) {
+function readJson(req, limit = 1e6) {
   return new Promise((resolve, reject) => {
     let size = 0; const chunks = [];
-    req.on('data', c => { size += c.length; if (size > 1e6) { reject(new Error('zu groß')); req.destroy(); } else chunks.push(c); });
+    req.on('data', c => { size += c.length; if (size > limit) { reject(new Error('zu groß')); req.destroy(); } else chunks.push(c); });
     req.on('end', () => { try { resolve(chunks.length ? JSON.parse(Buffer.concat(chunks).toString('utf8')) : {}); } catch { reject(new Error('ungültiges JSON')); } });
     req.on('error', reject);
   });
@@ -520,13 +521,35 @@ async function handleGuests(req, res, p, m, d) {
 
 const INV_DIR = path.join(DATA_DIR, 'rechnungen');
 const INV_TEST_DIR = path.join(DATA_DIR, 'rechnungen-test');
+const LOGO_DIR = path.join(DATA_DIR, 'logo');
+const DEFAULT_LOGO = path.join(__dirname, 'assets', 'logo-default.png');
+let logoCache = { file: null, img: null };
+// Logo für die Rechnung, falls eingeschaltet (aufbereitet und zwischengespeichert)
+function currentLogo(S) {
+  if (!S.logo?.enabled || !S.logo.file) return null;
+  if (logoCache.file !== S.logo.file) {
+    try { logoCache = { file: S.logo.file, img: loadImage(fs.readFileSync(path.join(LOGO_DIR, S.logo.file))) }; }
+    catch (e) { console.error('Logo nicht lesbar:', e.message); logoCache = { file: S.logo.file, img: null }; }
+  }
+  return logoCache.img;
+}
+// Beim ersten Start mit Rechnungen das mitgelieferte Logo übernehmen (einmalig, danach entscheidet die Einstellung)
+function initLogo(d) {
+  const S = d.invoiceSettings;
+  if (S.logo.initialized || !fs.existsSync(DEFAULT_LOGO)) return;
+  try {
+    fs.mkdirSync(LOGO_DIR, { recursive: true });
+    if (!S.logo.file) { fs.copyFileSync(DEFAULT_LOGO, path.join(LOGO_DIR, 'logo-standard.png')); S.logo = { enabled: true, file: 'logo-standard.png', name: 'Ferienwohnungen Eberle' }; }
+    S.logo.initialized = true; store.save();
+  } catch (e) { console.error('Logo konnte nicht angelegt werden:', e.message); }
+}
 const invDir = inv => (inv.test ? INV_TEST_DIR : INV_DIR);
 function archive(inv) {
   // Festgeschriebene Rechnung einmalig als Datei ablegen (unveränderbar, GoBD); später wird nur diese Datei ausgeliefert
   fs.mkdirSync(invDir(inv), { recursive: true });
   const base = path.join(invDir(inv), inv.number.replace(/[^A-Za-z0-9-]/g, '_'));
   const xml = inv.eInvoice ? INV.xrechnungXml(inv) : null;
-  const pdf = INV.invoicePdf(inv, { xml }).buffer;
+  const pdf = INV.invoicePdf(inv, { xml, logo: currentLogo(store.data.invoiceSettings) }).buffer;
   const written = [];
   try {
     if (xml) { fs.writeFileSync(base + '.xml', xml, { flag: 'wx' }); written.push(base + '.xml'); }
@@ -543,7 +566,26 @@ function invSummary(d, i) {
 
 async function handleInvoices(req, res, p, m, d, url) {
   INV.ensure(d);
+  initLogo(d);
   const S = d.invoiceSettings;
+  if (p === '/api/admin/invoice-logo' && m === 'GET') {
+    if (!S.logo.file) return send(res, 404, 'Kein Logo', 'text/plain; charset=utf-8');
+    const f = path.join(LOGO_DIR, S.logo.file);
+    return send(res, 200, fs.readFileSync(f), /\.jpe?g$/i.test(f) ? 'image/jpeg' : 'image/png', { 'Cache-Control': 'no-store' });
+  }
+  if (p === '/api/admin/invoice-logo' && m === 'POST') {
+    const b = await readJson(req, 6e6);
+    const buf = Buffer.from(String(b.data || '').replace(/^data:[^,]*,/, ''), 'base64');
+    if (!buf.length || buf.length > 4e6) throw new Error('Bitte eine Bilddatei bis 4 MB wählen.');
+    const img = loadImage(buf); // prüft das Format
+    const file = `logo-${Date.now()}.${img.kind === 'jpeg' ? 'jpg' : 'png'}`;
+    fs.mkdirSync(LOGO_DIR, { recursive: true });
+    fs.writeFileSync(path.join(LOGO_DIR, file), buf);
+    const old = S.logo.file;
+    S.logo = { enabled: true, file, name: String(b.name || '').slice(0, 120), initialized: true };
+    if (old && old !== file) fs.rmSync(path.join(LOGO_DIR, old), { force: true });
+    store.save(); return send(res, 200, { ok: true, settings: S });
+  }
   if (p === '/api/admin/invoice-settings' && m === 'GET') return send(res, 200, { settings: S, year: new Date().getFullYear() });
   if (p === '/api/admin/invoice-settings' && m === 'PUT') { d.invoiceSettings = INV.cleanSettings(await readJson(req), S); store.save(); return send(res, 200, { settings: d.invoiceSettings }); }
   if (p === '/api/admin/invoices' && m === 'GET') {
@@ -581,7 +623,7 @@ async function handleInvoices(req, res, p, m, d, url) {
       if (inv.status !== 'ausgestellt' || !inv.files?.xml) throw new Error('Für diese Rechnung gibt es keine E-Rechnung.');
       return send(res, 200, fs.readFileSync(path.join(invDir(inv), inv.files.xml)), 'application/xml; charset=utf-8', { 'Content-Disposition': `attachment; filename="${name}.xml"` });
     }
-    const buf = inv.status === 'ausgestellt' && inv.files?.pdf ? fs.readFileSync(path.join(invDir(inv), inv.files.pdf)) : INV.invoicePdf(inv, { draftSettings: S }).buffer;
+    const buf = inv.status === 'ausgestellt' && inv.files?.pdf ? fs.readFileSync(path.join(invDir(inv), inv.files.pdf)) : INV.invoicePdf(inv, { draftSettings: S, logo: currentLogo(S) }).buffer;
     return send(res, 200, buf, 'application/pdf', { 'Content-Disposition': `inline; filename="${name}.pdf"` });
   }
   if (p === '/api/admin/invoices/test-cleanup' && m === 'POST') {
