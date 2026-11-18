@@ -56,7 +56,7 @@
     }
     const now = midnight();
     if (!same(now, TODAY)) { TODAY = now; }
-    if (state.view !== 'settings' && state.view !== 'guests') render(); else renderTop();
+    if (!['settings', 'guests', 'invoices'].includes(state.view)) render(); else renderTop();
   }
 
   /* ---------- Kopf ---------- */
@@ -195,13 +195,15 @@
 
   function render() {
     renderTop();
-    const set = state.view === 'settings', gv = state.view === 'guests';
-    ['#toolbar', '#summary', '#legend', '#dock', '#arrows'].forEach(s => { $(s).hidden = set || gv; });
+    const set = state.view === 'settings', gv = state.view === 'guests', iv = state.view === 'invoices';
+    ['#toolbar', '#summary', '#legend', '#dock', '#arrows'].forEach(s => { $(s).hidden = set || gv || iv; });
+    if ($('#invBtn')) $('#invBtn').textContent = iv ? '◀ Zurück zum Kalender' : '🧾 Rechnungen';
     $('#setBtn').textContent = set ? '◀ Zurück zum Kalender' : '⚙ Einstellungen';
     if ($('#guestBtn')) $('#guestBtn').textContent = gv ? '◀ Zurück zum Kalender' : '👥 Gäste';
     const v = $('#view');
     if (set) return renderSettings();
     if (gv) return renderGuests();
+    if (iv) return renderInvoices();
     if (!data.apartments.length) { v.innerHTML = `<div class="empty">${loadError ? 'Keine Verbindung zum Server.' : 'Lade …'}</div>`; return; }
     if (state.view === 'w4') {
       $('#rangeTitle').textContent = `4 Wochen: ${fy(state.start)} bis ${fy(add(state.start, 27))}`;
@@ -579,6 +581,13 @@
       </section></div>`;
   }
 
+  function invCell(st) {
+    const list = (gst.detail.invoices || []).filter(i => i.stayId === st.id);
+    const links = list.map(i => `<button class="mini" type="button" data-openinv="${i.id}">${esc(i.number || 'Entwurf')}${i.kind === 'storno' ? ' Storno' : ''}</button>`).join(' ');
+    const active = list.some(i => i.kind === 'rechnung' && !i.cancelledBy);
+    return `${links}${active ? '' : ` <button class="mini" type="button" data-newinv="${st.id}">+ Rechnung</button>`}`;
+  }
+
   function guestDetail() {
     const { guest: g, stays } = gst.detail;
     const apts = gst.list.apartments.filter(a => a.source !== 'own');
@@ -600,6 +609,7 @@
         <td><select class="in" data-st="${s.id}|status" style="width:auto"><option value="ok">gebucht</option><option value="storniert" ${s.status === 'storniert' ? 'selected' : ''}>storniert</option></select></td>
         <td><input class="in" data-st="${s.id}|note" value="${esc(s.note || '')}"></td>
         <td class="small">${s.source === 'smoobu' ? `Smoobu${s.priceManual ? ', Preis geändert' : ''}` : 'von Hand'}</td>
+        <td style="white-space:nowrap">${invCell(s)}</td>
         <td><button class="mini" type="button" data-stdel="${s.id}" aria-label="Aufenthalt löschen">✕</button></td></tr>`;
     }).join('');
     const others = gst.list.guests.filter(x => x.id !== g.id).sort((a, b) => a.name.localeCompare(b.name));
@@ -620,8 +630,8 @@
       </section>
       <section class="sec"><h3>Aufenthalte und Preise</h3>
         <p class="d">Preise sind Gesamtpreise der Buchung. Änderst du einen Preis aus Smoobu von Hand, bleibt deine Angabe beim nächsten Abruf erhalten.</p>
-        <div class="tbl"><table><thead><tr><th>Anreise</th><th>Abreise</th><th>Nächte</th><th>Wohnung</th><th>Erw. + Kinder</th><th>Preis gesamt</th><th>pro Nacht</th><th>Kanal</th><th>Status</th><th>Notiz</th><th>Quelle</th><th></th></tr></thead>
-        <tbody>${body || '<tr><td colspan="12" class="small">Noch keine Aufenthalte.</td></tr>'}</tbody></table></div>
+        <div class="tbl"><table><thead><tr><th>Anreise</th><th>Abreise</th><th>Nächte</th><th>Wohnung</th><th>Erw. + Kinder</th><th>Preis gesamt</th><th>pro Nacht</th><th>Kanal</th><th>Status</th><th>Notiz</th><th>Quelle</th><th>Rechnung</th><th></th></tr></thead>
+        <tbody>${body || '<tr><td colspan="13" class="small">Noch keine Aufenthalte.</td></tr>'}</tbody></table></div>
         <div class="row"><b>Neuer Aufenthalt:</b> <input class="in" type="date" id="nsStart" style="width:auto"> bis <input class="in" type="date" id="nsEnd" style="width:auto">
           ${aptSel('id="nsApt"', apts[0]?.id)} <input class="in" id="nsPrice" placeholder="Preis €" style="width:100px"> <input class="in" id="nsChannel" placeholder="Kanal, z. B. Direkt" style="width:170px">
           <button class="mini" type="button" id="nsAdd">Hinzufügen</button></div>
@@ -677,6 +687,10 @@
       if (b.dataset.armed !== '1') { b.dataset.armed = '1'; b.textContent = 'Löschen?'; b.classList.add('danger'); return; }
       gAct(() => api(`/api/admin/stays/${b.dataset.stdel}`, { method: 'DELETE' }), 'Aufenthalt gelöscht.');
     });
+    $$('[data-openinv]').forEach(b => b.onclick = () => openInvoice(+b.dataset.openinv));
+    $$('[data-newinv]').forEach(b => b.onclick = async () => {
+      try { const r = await post('/api/admin/invoices', { stayId: +b.dataset.newinv }); openInvoice(r.id); } catch (e) { toast(e.message); }
+    });
     $('#nsAdd').onclick = () => {
       const body = { start: $('#nsStart').value, end: $('#nsEnd').value, aptId: $('#nsApt').value, price: $('#nsPrice').value, channel: $('#nsChannel').value.trim() || 'Direkt' };
       if (!body.start || !body.end) return toast('Bitte Anreise und Abreise wählen.');
@@ -693,6 +707,240 @@
       const b = $('#gDel');
       if (b.dataset.armed !== '1') { b.dataset.armed = '1'; b.textContent = 'Wirklich mit allen Aufenthalten löschen?'; b.classList.add('danger'); return; }
       gAct(async () => { await api(`/api/admin/guests/${gid}`, { method: 'DELETE' }); gst.id = null; }, 'Gast gelöscht.');
+    };
+  }
+
+  /* ---------- Rechnungen (nur PC) ---------- */
+
+  const ivs = { page: 'list', id: null, year: new Date().getFullYear(), q: Math.floor(new Date().getMonth() / 3) + 1, list: null, cur: null, set: null };
+  const num2 = v => (v == null || v === '' ? '' : String(v).replace('.', ','));
+  const vatSel = (attr, v) => `<select class="in" ${attr} style="width:auto">${[[7, '7 %'], [19, '19 %'], [0, '0 % (Kurtaxe)']].map(([k, t]) => `<option value="${k}" ${+v === k ? 'selected' : ''}>${t}</option>`).join('')}</select>`;
+
+  async function renderInvoices() {
+    const v = $('#view');
+    if (MODE !== 'admin') { state.view = 'w4'; return render(); }
+    try {
+      if (ivs.page === 'list') ivs.list = await api('/api/admin/invoices');
+      if (ivs.page === 'edit') ivs.cur = await api(`/api/admin/invoices/${ivs.id}`);
+      if (ivs.page === 'settings') ivs.set = (await api('/api/admin/invoice-settings')).settings;
+    } catch (e) { ivs.page = 'list'; v.innerHTML = `<div class="notice warn">${esc(e.message)}</div>`; return; }
+    v.innerHTML = ivs.page === 'edit' ? invEditor() : ivs.page === 'settings' ? invSettings() : invList();
+    bindInvoices();
+  }
+
+  function invList() {
+    const L = ivs.list;
+    const yrs = []; for (let y = new Date().getFullYear() + 1; y >= new Date().getFullYear() - 6; y--) yrs.push(y);
+    const rows = L.invoices.map(i => `<tr class="click" data-inv="${i.id}">
+      <td><b>${esc(i.number || 'Entwurf')}</b>${i.kind === 'storno' ? ' <span class="badge warn">Storno</span>' : ''}${i.cancelledBy ? ' <span class="badge off">storniert</span>' : ''}${i.eInvoice ? ' <span class="badge ok" title="E-Rechnung">E</span>' : ''}</td>
+      <td>${i.date ? dmy(i.date) : '<span class="small">noch nicht festgeschrieben</span>'}</td>
+      <td>${esc(i.buyer)}</td><td class="small">${dmy(i.from)} – ${dmy(i.to)}${i.aptName ? ` · ${esc(i.aptName)}` : ''}</td>
+      <td style="text-align:right">${euro(i.gross)}</td>
+      <td>${i.status === 'entwurf' ? '<span class="badge off">Entwurf</span>' : i.paidAt ? `<span class="badge ok">${i.kind === 'storno' ? 'erstattet' : 'bezahlt'} ${dmy(i.paidAt)}</span>` : `<span class="badge err">${i.kind === 'storno' ? 'offen' : 'offen'}</span>`}</td></tr>`).join('');
+    return `<div class="sbody">
+      ${L.sellerReady ? '' : '<div class="notice warn">Bitte zuerst unter „Vermieterdaten und Preise“ Name, Anschrift und Steuernummer eintragen.</div>'}
+      <section class="sec"><h3>Rechnungen</h3>
+        <p class="d">Eine neue Rechnung legst du beim Gast an: 👥 Gäste → Gast öffnen → beim Aufenthalt „Rechnung“. Festgeschriebene Rechnungen sind nicht mehr änderbar, Korrekturen laufen über „Stornieren“.</p>
+        <div class="row"><button class="mini" type="button" id="ivSet">Vermieterdaten und Preise</button><button class="mini" type="button" id="ivToGuests">Zu den Gästen</button></div>
+        <div class="tbl"><table><thead><tr><th>Nummer</th><th>Datum</th><th>Gast</th><th>Zeitraum</th><th style="text-align:right">Betrag</th><th>Status</th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="6" class="small">Noch keine Rechnungen.</td></tr>'}</tbody></table></div>
+      </section>
+      <section class="sec"><h3>Umsatzsteuer-Bericht</h3>
+        <p class="d">${L.taxation === 'ist' ? 'Ist-Versteuerung: gezählt wird, was im Zeitraum bezahlt wurde. Bitte Zahlungseingänge in den Rechnungen eintragen.' : 'Soll-Versteuerung: gezählt wird nach Abreisedatum.'} Enthält die Kennzahlen 86 und 81 für die Voranmeldung, alle Rechnungen und zur Information die Aufenthalte über Airbnb/Booking ohne App-Rechnung.</p>
+        <div class="row">Jahr <select class="in" id="ivY" style="width:auto">${yrs.map(y => `<option ${y === ivs.year ? 'selected' : ''}>${y}</option>`).join('')}</select>
+          Quartal <select class="in" id="ivQ" style="width:auto">${[1, 2, 3, 4].map(q => `<option value="${q}" ${q === ivs.q ? 'selected' : ''}>${q}. Quartal</option>`).join('')}</select>
+          <button class="mini" type="button" data-rep="quartal|pdf">Quartalsbericht (PDF)</button><button class="mini" type="button" data-rep="quartal|csv">Quartal als Excel (CSV)</button>
+          <button class="mini" type="button" data-rep="jahr|pdf">Jahresbericht (PDF)</button><button class="mini" type="button" data-rep="jahr|csv">Jahr als Excel (CSV)</button></div>
+      </section></div>`;
+  }
+
+  function invSettings() {
+    const S = ivs.set, sl = S.seller, P = S.pricing;
+    const f = (k, label, attr = 'data-sl', val = sl[k], wide = false, ph = '') => `<label${wide ? ' class="wide"' : ''}>${label}<input class="in" ${attr}="${k}" value="${esc(val ?? '')}" placeholder="${esc(ph)}"></label>`;
+    const yr = new Date().getFullYear();
+    const kt = S.kurtaxe.groups.map((g, i) => `<tr>
+      <td><input class="in" data-kt="${i}|label" value="${esc(g.label)}"></td>
+      <td><input class="in short" data-kt="${i}|ageFrom" value="${g.ageFrom}" style="width:64px"> bis <input class="in short" data-kt="${i}|ageTo" value="${g.ageTo}" style="width:64px"></td>
+      <td><input class="in short" data-kt="${i}|rate" value="${num2(g.rate)}"></td>
+      <td><input class="in short" data-kt="${i}|rateNeben" value="${num2(g.rateNeben)}" placeholder="wie Haupts."></td>
+      <td><button class="mini" type="button" data-ktdel="${i}" aria-label="Zeile löschen">✕</button></td></tr>`).join('');
+    return `<div class="sbody">
+      <div class="row"><button class="btn" type="button" id="ivBack">◀ Rechnungen</button></div>
+      <section class="sec"><h3>Vermieterin (steht auf jeder Rechnung)</h3>
+        <p class="d">Änderungen gelten für neue Rechnungen. Festgeschriebene Rechnungen behalten die Angaben von damals.</p>
+        <div class="gform">${f('name', 'Name')}${f('street', 'Straße und Hausnummer')}${f('zip', 'PLZ')}${f('city', 'Ort')}
+          ${f('phone', 'Telefon')}${f('email', 'E-Mail')}${f('taxNumber', 'Steuernummer', 'data-sl', sl.taxNumber, false, 'z. B. 61/123/45678')}${f('vatId', 'USt-IdNr. (falls vorhanden)', 'data-sl', sl.vatId, false, 'DE…')}
+          ${f('bank', 'Bank')}${f('iban', 'IBAN')}${f('bic', 'BIC')}${f('accountHolder', 'Kontoinhaber')}</div>
+      </section>
+      <section class="sec"><h3>Rechnungsnummern und Steuer</h3>
+        <div class="gform">
+          <label>Präfix<input class="in" data-iv="numberPrefix" value="${esc(S.numberPrefix)}"></label>
+          <label>Nächste Nummer ${yr}<input class="in" id="ivNext" value="${(S.counters[yr] || 0) + 1}"></label>
+          <label>Zahlungsziel (Tage)<input class="in" data-iv="paymentDays" value="${S.paymentDays}"></label>
+          <label>Umsatzsteuer auf Übernachtung<select class="in" data-iv="vatRate">${[7, 19, 0].map(r => `<option value="${r}" ${S.vatRate === r ? 'selected' : ''}>${r} %</option>`).join('')}</select></label>
+          <label>Versteuerung<select class="in" data-iv="taxation"><option value="ist" ${S.taxation === 'ist' ? 'selected' : ''}>Ist (nach Zahlungseingang)</option><option value="soll" ${S.taxation === 'soll' ? 'selected' : ''}>Soll (nach Leistung)</option></select></label>
+          <label class="wide">Fußzeile (optional)<input class="in" data-iv="footer" value="${esc(S.footer)}"></label></div>
+        <p class="small">Beispiel: ${esc(S.numberPrefix ? S.numberPrefix + '-' : '')}${yr}-${String((S.counters[yr] || 0) + 1).padStart(3, '0')}. Hast du dieses Jahr schon Rechnungen auf Papier geschrieben, trag bei „Nächste Nummer“ die folgende Nummer ein. Ist-/Soll-Versteuerung bitte wie beim Finanzamt angemeldet wählen.</p>
+      </section>
+      <section class="sec"><h3>Preisbausteine (Bruttopreise)</h3>
+        <div class="gform">
+          <label>Im Grundpreis enthaltene Personen<input class="in" data-pr="includedPersons" value="${P.includedPersons}"></label>
+          <label>Mehrbelegung Erwachsene je Person und Nacht (€)<input class="in" data-pr="extraAdult" value="${num2(P.extraAdult)}"></label>
+          <label>Mehrbelegung Kinder je Kind und Nacht (€)<input class="in" data-pr="extraChild" value="${num2(P.extraChild)}"></label>
+          <label>Kinderpreis gilt bis einschließlich (Jahre)<input class="in" data-pr="childMaxAge" value="${P.childMaxAge}"></label>
+          <label>Kleinkinder frei bis einschließlich (Jahre)<input class="in" data-pr="infantMaxAge" value="${P.infantMaxAge}"></label>
+          <label>Endreinigung (€, 0 = keine)<input class="in" data-pr="cleaning" value="${num2(P.cleaning)}"></label></div>
+        <p class="small">Die im Grundpreis enthaltenen Plätze werden zuerst mit Erwachsenen belegt. Alle weiteren Personen kosten den Mehrbelegungspreis.</p>
+      </section>
+      <section class="sec"><h3>Kurtaxe (ohne Umsatzsteuer)</h3>
+        <p class="d">Sätze je Person und Nacht nach Alter. Gilt in der Nebensaison ein anderer Satz, trag ihn rechts ein. Die Saisons kommen aus ⚙ Einstellungen.</p>
+        <div class="row"><label>Bezeichnung auf der Rechnung <input class="in" id="ktLabel" value="${esc(S.kurtaxe.label)}" style="width:200px"></label></div>
+        <div class="tbl"><table><thead><tr><th>Gruppe</th><th>Alter</th><th>€ Hauptsaison</th><th>€ übrige Zeit</th><th></th></tr></thead><tbody>${kt}</tbody></table></div>
+        <div class="row"><button class="mini" type="button" id="ktAdd">+ Altersgruppe</button></div>
+      </section></div>`;
+  }
+
+  function invEditor() {
+    const { invoice: I, totals: T, missing } = ivs.cur;
+    const draft = I.status === 'entwurf';
+    const b = I.buyer;
+    const head = `<div class="row"><button class="btn" type="button" id="ivBack">◀ Rechnungen</button>${I.guestId ? '<button class="btn" type="button" id="ivGuest">Zum Gast</button>' : ''}
+      <a class="btn" href="/export/rechnung/${I.id}.pdf" target="_blank" style="text-decoration:none;color:var(--fg)">${draft ? 'Vorschau PDF' : 'PDF öffnen'}</a>
+      ${!draft && I.files?.xml ? `<a class="btn" href="/export/rechnung/${I.id}.xml" style="text-decoration:none;color:var(--fg)">E-Rechnung (XML)</a>` : ''}</div>`;
+    const sums = `<dl class="facts" style="max-width:520px">
+      <dt>Gesamt brutto</dt><dd>${euro(T.gross)}</dd>
+      ${T.vat.map(v => v.rate ? `<dt>darin ${v.rate} % USt</dt><dd>${euro(v.tax)} (netto ${euro(v.net)})</dd>` : `<dt>Kurtaxe</dt><dd>${euro(v.gross)}</dd>`).join('')}
+      ${T.deposit ? `<dt>Anzahlung</dt><dd>${euro(-T.deposit)}</dd>` : ''}
+      <dt>${I.kind === 'storno' ? 'Gutschrift' : 'Zu zahlen'}</dt><dd>${euro(T.due)}</dd></dl>`;
+    if (!draft) {
+      return `<div class="sbody">${head}
+        <section class="sec"><h3>${I.kind === 'storno' ? 'Stornorechnung' : 'Rechnung'} ${esc(I.number)} ${I.cancelledBy ? '<span class="badge off">storniert</span>' : ''}</h3>
+          <p class="d">Festgeschrieben am ${dmy(I.date)} für ${esc(b.name)}, ${dmy(I.from)} bis ${dmy(I.to)}${I.aptName ? `, ${esc(I.aptName)}` : ''}.${I.kind === 'storno' ? ` Storniert Rechnung ${esc(I.refNumber)}.` : ''}${I.eInvoice ? ' Mit E-Rechnung (XRechnung).' : ''}</p>
+          ${sums}
+          <div class="row">${I.kind === 'storno' ? 'Erstattet am' : 'Bezahlt am'} <input class="in" type="date" id="ivPaid" value="${I.paidAt || ''}" style="width:auto"> <button class="mini" type="button" id="ivPaidToday">heute</button>
+            ${I.paidAt ? '<button class="mini" type="button" id="ivPaidClear">zurücksetzen</button>' : ''}</div>
+          ${I.kind === 'rechnung' && !I.cancelledBy ? '<div class="row"><button class="mini" type="button" id="ivCancel">Rechnung stornieren</button><span class="small">Erstellt eine Stornorechnung mit neuer Nummer. Danach kannst du beim Gast eine neue Rechnung schreiben.</span></div>' : ''}
+        </section></div>`;
+    }
+    const items = I.items.map((it, i) => `<tr>
+      <td><input class="in" data-it="${i}|text" value="${esc(it.text)}" style="min-width:280px"></td>
+      <td><input class="in short" data-it="${i}|qty" value="${num2(it.qty)}" style="width:70px"></td>
+      <td><input class="in" data-it="${i}|unit" value="${esc(it.unit)}" style="width:100px"></td>
+      <td><input class="in short" data-it="${i}|price" value="${num2(it.price)}" style="width:90px"></td>
+      <td>${vatSel(`data-it="${i}|vat"`, it.vat)}</td>
+      <td style="text-align:right;white-space:nowrap">${euro(Math.round(it.qty * it.price * 100) / 100)}</td>
+      <td><button class="mini" type="button" data-itdel="${i}" aria-label="Position löschen">✕</button></td></tr>`).join('');
+    return `<div class="sbody">${head}
+      <section class="sec"><h3>Rechnungsentwurf für ${esc(b.name)}</h3>
+        <div class="gform">
+          <label>Name / Firma<input class="in" data-b="name" value="${esc(b.name)}"></label>
+          <label>Straße<input class="in" data-b="street" value="${esc(b.street)}"></label>
+          <label>PLZ<input class="in" data-b="zip" value="${esc(b.zip)}"></label>
+          <label>Ort<input class="in" data-b="city" value="${esc(b.city)}"></label>
+          <label>Land (2 Buchstaben)<input class="in" data-b="country" value="${esc(b.country)}"></label>
+          <label>E-Mail<input class="in" data-b="email" value="${esc(b.email)}"></label>
+          <label>USt-IdNr. des Gastes (nur Firmen)<input class="in" data-b="vatId" value="${esc(b.vatId)}"></label>
+          <label>Referenz / Bestellnummer des Gastes<input class="in" data-b="reference" value="${esc(b.reference)}"></label>
+        </div>
+      </section>
+      <section class="sec"><h3>Aufenthalt und Berechnung</h3>
+        <div class="gform">
+          <label>Anreise<input class="in" type="date" data-p="from" value="${I.from}"></label>
+          <label>Abreise<input class="in" type="date" data-p="to" value="${I.to}"></label>
+          <label>Wohnung<input class="in" data-p="aptName" value="${esc(I.aptName)}"></label>
+          <label>Grundpreis je Nacht (€, brutto)<input class="in" data-in="perNight" value="${num2(I.input.perNight)}"></label>
+          <label class="wide">Alter aller Reisenden, mit Komma getrennt (für Mehrbelegung und Kurtaxe)<input class="in" data-in="ages" value="${esc((I.input.ages || []).join(', '))}" placeholder="z. B. 45, 43, 12, 4"></label>
+          <label style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" data-in="cleaning" ${I.input.cleaning ? 'checked' : ''}> Endreinigung berechnen</label>
+        </div>
+        <div class="row"><button class="btn primary" type="button" id="ivRecalc">Positionen neu berechnen</button><span class="small">Überschreibt die Positionen unten mit den Preisbausteinen.</span></div>
+      </section>
+      <section class="sec"><h3>Positionen</h3>
+        <div class="tbl"><table><thead><tr><th>Leistung</th><th>Menge</th><th>Einheit</th><th>Einzelpreis brutto</th><th>USt</th><th style="text-align:right">Gesamt</th><th></th></tr></thead><tbody>${items || '<tr><td colspan="7" class="small">Keine Positionen.</td></tr>'}</tbody></table></div>
+        <div class="row"><button class="mini" type="button" id="itAdd">+ Position</button>
+          Anzahlung erhalten (€) <input class="in short" id="ivDep" value="${num2(I.deposit)}"></div>
+        <label class="row" style="flex-direction:column;align-items:stretch">Hinweis auf der Rechnung (optional)<input class="in" id="ivNote" value="${esc(I.note)}"></label>
+        ${sums}
+      </section>
+      <section class="sec"><h3>Festschreiben</h3>
+        <label class="row"><input type="checkbox" id="ivE" ${I.eInvoice ? 'checked' : ''}> Auch als E-Rechnung (XRechnung) ausstellen, z. B. wenn eine Firma das verlangt</label>
+        ${missing.length ? `<div class="notice warn">Bitte noch ergänzen: ${missing.map(esc).join(', ')}.</div>` : ''}
+        <div class="row"><button class="btn primary" type="button" id="ivIssue" ${missing.length ? 'disabled' : ''}>Rechnung festschreiben</button>
+          <button class="mini" type="button" id="ivDel">Entwurf löschen</button></div>
+        <p class="small">Beim Festschreiben bekommt die Rechnung ihre Nummer und wird als PDF abgelegt. Danach ist sie nicht mehr änderbar.</p>
+      </section></div>`;
+  }
+
+  async function iAct(fn, okMsg) {
+    try { await fn(); if (okMsg) toast(okMsg); }
+    catch (e) { toast(e.message); }
+    const y = window.scrollY;
+    await renderInvoices();
+    window.scrollTo(0, y);
+  }
+
+  function openInvoice(id) { state.view = 'invoices'; ivs.page = 'edit'; ivs.id = id; render(); window.scrollTo(0, 0); }
+
+  function bindInvoices() {
+    const put = (p, body) => api(p, { method: 'PUT', body });
+    const post = (p, body) => api(p, { method: 'POST', body });
+    if (ivs.page === 'list') {
+      $$('[data-inv]').forEach(r => r.onclick = () => openInvoice(+r.dataset.inv));
+      $('#ivSet').onclick = () => { ivs.page = 'settings'; renderInvoices(); };
+      $('#ivToGuests').onclick = () => { state.view = 'guests'; gst.id = null; render(); };
+      $('#ivY').onchange = e => { ivs.year = +e.target.value; };
+      $('#ivQ').onchange = e => { ivs.q = +e.target.value; };
+      $$('[data-rep]').forEach(b => b.onclick = () => { const [art, fmt] = b.dataset.rep.split('|'); window.open(`/export/ust-bericht.${fmt}?art=${art}&jahr=${ivs.year}&q=${ivs.q}`, '_blank'); });
+      return;
+    }
+    $('#ivBack').onclick = () => { ivs.page = 'list'; renderInvoices(); };
+    if (ivs.page === 'settings') {
+      const S = ivs.set;
+      const save = body => iAct(() => put('/api/admin/invoice-settings', body), 'Gespeichert.');
+      $$('[data-sl]').forEach(i => i.onchange = () => save({ seller: { [i.dataset.sl]: i.value } }));
+      $$('[data-iv]').forEach(i => i.onchange = () => save({ [i.dataset.iv]: i.value }));
+      $$('[data-pr]').forEach(i => i.onchange = () => save({ pricing: { [i.dataset.pr]: i.value } }));
+      $('#ivNext').onchange = e => save({ nextNumber: { year: new Date().getFullYear(), value: e.target.value } });
+      $('#ktLabel').onchange = e => save({ kurtaxe: { label: e.target.value } });
+      const groups = () => S.kurtaxe.groups.map(g => ({ ...g }));
+      $$('[data-kt]').forEach(i => i.onchange = () => { const [n, k] = i.dataset.kt.split('|'); const g = groups(); g[+n][k] = i.value; save({ kurtaxe: { groups: g } }); });
+      $$('[data-ktdel]').forEach(b => b.onclick = () => { const g = groups(); g.splice(+b.dataset.ktdel, 1); save({ kurtaxe: { groups: g } }); });
+      $('#ktAdd').onclick = () => { const g = groups(); const last = g[g.length - 1]; g.push({ label: 'Neue Gruppe', ageFrom: last ? Math.min(120, last.ageTo + 1) : 0, ageTo: 120, rate: 0, rateNeben: null }); save({ kurtaxe: { groups: g } }); };
+      return;
+    }
+    const I = ivs.cur.invoice;
+    const url = `/api/admin/invoices/${I.id}`;
+    if ($('#ivGuest')) $('#ivGuest').onclick = () => { state.view = 'guests'; gst.id = I.guestId; render(); window.scrollTo(0, 0); };
+    if (I.status !== 'entwurf') {
+      $('#ivPaid').onchange = e => iAct(() => put(`${url}/paid`, { paidAt: e.target.value }), 'Zahlung gespeichert.');
+      $('#ivPaidToday').onclick = () => iAct(() => put(`${url}/paid`, { paidAt: iso(new Date()) }), 'Zahlung gespeichert.');
+      if ($('#ivPaidClear')) $('#ivPaidClear').onclick = () => iAct(() => put(`${url}/paid`, { paidAt: '' }), 'Zurückgesetzt.');
+      if ($('#ivCancel')) $('#ivCancel').onclick = () => {
+        const b = $('#ivCancel');
+        if (b.dataset.armed !== '1') { b.dataset.armed = '1'; b.textContent = 'Wirklich stornieren?'; b.classList.add('danger'); return; }
+        let r = null; iAct(async () => { r = await post(`${url}/cancel`); ivs.id = r.id; }).then(() => r && toast(`Stornorechnung ${r.number} erstellt.`));
+      };
+      return;
+    }
+    $$('[data-b]').forEach(i => i.onchange = () => iAct(() => put(url, { buyer: { [i.dataset.b]: i.value } })));
+    $$('[data-p]').forEach(i => i.onchange = () => iAct(() => put(url, { [i.dataset.p]: i.value })));
+    $$('[data-in]').forEach(i => i.onchange = () => iAct(() => put(url, { input: { [i.dataset.in]: i.type === 'checkbox' ? i.checked : i.value } })));
+    const items = () => I.items.map(it => ({ ...it }));
+    $$('[data-it]').forEach(i => i.onchange = () => { const [n, k] = i.dataset.it.split('|'); const it = items(); it[+n][k] = i.value; iAct(() => put(url, { items: it })); });
+    $$('[data-itdel]').forEach(b => b.onclick = () => { const it = items(); it.splice(+b.dataset.itdel, 1); iAct(() => put(url, { items: it })); });
+    $('#itAdd').onclick = () => iAct(() => put(url, { items: [...items(), { text: 'Weitere Leistung', qty: 1, unit: 'Stück', price: 0, vat: ivs.cur.settings.vatRate }] }));
+    $('#ivRecalc').onclick = () => iAct(() => post(`${url}/recompute`), 'Neu berechnet.');
+    $('#ivDep').onchange = e => iAct(() => put(url, { deposit: e.target.value }));
+    $('#ivNote').onchange = e => iAct(() => put(url, { note: e.target.value }));
+    $('#ivE').onchange = e => iAct(() => put(url, { eInvoice: e.target.checked }));
+    $('#ivIssue').onclick = () => {
+      const b = $('#ivIssue');
+      if (b.dataset.armed !== '1') { b.dataset.armed = '1'; b.textContent = 'Jetzt endgültig festschreiben?'; b.classList.add('danger'); return; }
+      let r = null; iAct(async () => { r = await post(`${url}/issue`); }).then(() => r && toast(`Rechnung ${r.number} festgeschrieben.`));
+    };
+    $('#ivDel').onclick = () => {
+      const b = $('#ivDel');
+      if (b.dataset.armed !== '1') { b.dataset.armed = '1'; b.textContent = 'Entwurf wirklich löschen?'; b.classList.add('danger'); return; }
+      iAct(async () => { await api(url, { method: 'DELETE' }); ivs.page = 'list'; }, 'Entwurf gelöscht.');
     };
   }
 
@@ -721,6 +969,7 @@
     $('#pdfBtn').onclick = () => open(true);
   }
   $('#setBtn').onclick = () => { state.view = state.view === 'settings' ? 'w4' : 'settings'; render(); window.scrollTo(0, 0); };
+  if ($('#invBtn')) $('#invBtn').onclick = () => { if (state.view === 'invoices') state.view = 'w4'; else { state.view = 'invoices'; ivs.page = 'list'; } render(); window.scrollTo(0, 0); };
   if ($('#guestBtn')) $('#guestBtn').onclick = () => { if (state.view === 'guests') state.view = 'w4'; else { state.view = 'guests'; gst.id = null; } render(); window.scrollTo(0, 0); };
 
   load();

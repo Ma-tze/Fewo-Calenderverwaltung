@@ -17,6 +17,7 @@ import { monthPdf } from './report.js';
 import { fetchHolidays, expandSeasons, copySeasons } from './holidays.js';
 import { smoobuConfigured, smoobuAuthMode, listApartments as smoobuApartments, fetchReservations } from './smoobu.js';
 import * as G from './guests.js';
+import * as INV from './invoices.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC = path.join(__dirname, '..', 'public');
@@ -260,7 +261,7 @@ async function handle(req, res, mode) {
     return send(res, 200, buffer, 'application/pdf', { 'Content-Disposition': `inline; filename="${filename}"` });
   }
 
-  if (p.startsWith('/api/admin/') || p === '/export/gaeste.csv') {
+  if (p.startsWith('/api/admin/') || p === '/export/gaeste.csv' || p.startsWith('/export/rechnung/') || p.startsWith('/export/ust-bericht.')) {
     if (mode !== 'admin') return send(res, 403, { error: 'Nur über die PC-Ansicht möglich.' });
     try { return await handleAdmin(req, res, p, url); }
     catch (e) { return send(res, 400, { error: e.message }); }
@@ -460,6 +461,8 @@ async function handleAdmin(req, res, p, url) {
 
   const r = await handleGuests(req, res, p, m, d);
   if (r !== false) return r;
+  const ri = await handleInvoices(req, res, p, m, d, url);
+  if (ri !== false) return ri;
 
   return send(res, 404, { error: 'Unbekannt' });
 }
@@ -499,7 +502,7 @@ async function handleGuests(req, res, p, m, d) {
   if (gm) {
     const g = d.guests.find(x => x.id === +gm[1]);
     if (!g) throw new Error('Gast unbekannt');
-    if (m === 'GET') return send(res, 200, { guest: g, stays: G.guestStays(d, g.id) });
+    if (m === 'GET') return send(res, 200, { guest: g, stays: G.guestStays(d, g.id), invoices: (d.invoices || []).filter(i => i.guestId === g.id).map(i => invSummary(d, i)) });
     if (m === 'PUT') { Object.assign(g, G.cleanGuest(await readJson(req), g), { updatedAt: new Date().toISOString() }); store.save(); return send(res, 200, g); }
     if (m === 'DELETE') { G.deleteGuest(d, g.id); store.save(); return send(res, 200, { ok: true }); }
   }
@@ -508,6 +511,102 @@ async function handleGuests(req, res, p, m, d) {
   const sm = p.match(/^\/api\/admin\/stays\/(\d+)$/);
   if (sm && m === 'PUT') { const st = G.updateStay(d, +sm[1], await readJson(req)); store.save(); return send(res, 200, st); }
   if (sm && m === 'DELETE') { d.stays = d.stays.filter(x => x.id !== +sm[1]); store.save(); return send(res, 200, { ok: true }); }
+  return false;
+}
+
+/* ---------- Rechnungen ---------- */
+
+const INV_DIR = path.join(DATA_DIR, 'rechnungen');
+function archive(inv) {
+  // Festgeschriebene Rechnung einmalig als Datei ablegen (unveränderbar, GoBD); später wird nur diese Datei ausgeliefert
+  fs.mkdirSync(INV_DIR, { recursive: true });
+  const base = path.join(INV_DIR, inv.number.replace(/[^A-Za-z0-9-]/g, '_'));
+  const xml = inv.eInvoice ? INV.xrechnungXml(inv) : null;
+  const pdf = INV.invoicePdf(inv, { xml }).buffer;
+  const written = [];
+  try {
+    if (xml) { fs.writeFileSync(base + '.xml', xml, { flag: 'wx' }); written.push(base + '.xml'); }
+    fs.writeFileSync(base + '.pdf', pdf, { flag: 'wx' }); written.push(base + '.pdf');
+  } catch (e) { written.forEach(f => fs.rmSync(f, { force: true })); throw e; }
+  inv.files = { pdf: path.basename(base) + '.pdf', xml: xml ? path.basename(base) + '.xml' : null };
+}
+
+function invSummary(d, i) {
+  const t = i.status === 'entwurf' ? INV.totals(i.items, i.deposit) : i.totals;
+  return { id: i.id, number: i.number, kind: i.kind, status: i.status, date: i.date || null, from: i.from, to: i.to, buyer: i.buyer.name, guestId: i.guestId, stayId: i.stayId,
+    gross: t.gross, due: t.due, paidAt: i.paidAt || null, eInvoice: !!i.eInvoice, cancelledBy: i.cancelledBy || null, refNumber: i.refNumber || null, aptName: i.aptName };
+}
+
+async function handleInvoices(req, res, p, m, d, url) {
+  INV.ensure(d);
+  const S = d.invoiceSettings;
+  if (p === '/api/admin/invoice-settings' && m === 'GET') return send(res, 200, { settings: S, year: new Date().getFullYear() });
+  if (p === '/api/admin/invoice-settings' && m === 'PUT') { d.invoiceSettings = INV.cleanSettings(await readJson(req), S); store.save(); return send(res, 200, { settings: d.invoiceSettings }); }
+  if (p === '/api/admin/invoices' && m === 'GET') {
+    return send(res, 200, { invoices: [...d.invoices].sort((a, b) => (b.id - a.id)).map(i => invSummary(d, i)), taxation: S.taxation, sellerReady: !!(S.seller.name && S.seller.taxNumber) });
+  }
+  if (p === '/api/admin/invoices' && m === 'POST') {
+    const { stayId } = await readJson(req);
+    const stay = (d.stays || []).find(x => x.id === +stayId);
+    if (!stay) throw new Error('Aufenthalt unbekannt');
+    const open = d.invoices.find(i => i.stayId === stay.id && i.kind === 'rechnung' && !i.cancelledBy);
+    if (open) return send(res, 200, { id: open.id, existing: true });
+    const guest = d.guests.find(g => g.id === stay.guestId);
+    const inv = INV.draftFromStay(d, stay, guest, d.apartments.find(a => a.id === stay.aptId)?.name || '');
+    store.save();
+    return send(res, 200, { id: inv.id });
+  }
+  const rp = p.match(/^\/api\/admin\/ust-bericht$/);
+  if ((rp && m === 'GET') || ((p === '/export/ust-bericht.pdf' || p === '/export/ust-bericht.csv') && m === 'GET')) {
+    const kind = url.searchParams.get('art') === 'jahr' ? 'jahr' : 'quartal';
+    const year = +url.searchParams.get('jahr'), q = +url.searchParams.get('q') || 1;
+    if (!(year >= 2000 && year <= 2100) || !(q >= 1 && q <= 4)) throw new Error('Zeitraum ungültig');
+    const rep = INV.vatReport(d, INV.periodOf(kind, year, q));
+    if (rp) return send(res, 200, rep);
+    const fn = `USt-Bericht-${kind === 'jahr' ? year : `${year}-Q${q}`}`;
+    if (p.endsWith('.csv')) return send(res, 200, INV.vatReportCsv(rep), 'text/csv; charset=utf-8', { 'Content-Disposition': `attachment; filename="${fn}.csv"` });
+    return send(res, 200, INV.vatReportPdf(rep, S.seller.name), 'application/pdf', { 'Content-Disposition': `inline; filename="${fn}.pdf"` });
+  }
+  const ex = p.match(/^\/export\/rechnung\/(\d+)\.(pdf|xml)$/);
+  if (ex && m === 'GET') {
+    const inv = d.invoices.find(i => i.id === +ex[1]);
+    if (!inv) return send(res, 404, 'Nicht gefunden', 'text/plain; charset=utf-8');
+    const name = `${inv.kind === 'storno' ? 'Storno' : 'Rechnung'}-${inv.number || `Entwurf-${inv.id}`}`;
+    if (ex[2] === 'xml') {
+      if (inv.status !== 'ausgestellt' || !inv.files?.xml) throw new Error('Für diese Rechnung gibt es keine E-Rechnung.');
+      return send(res, 200, fs.readFileSync(path.join(INV_DIR, inv.files.xml)), 'application/xml; charset=utf-8', { 'Content-Disposition': `attachment; filename="${name}.xml"` });
+    }
+    const buf = inv.status === 'ausgestellt' && inv.files?.pdf ? fs.readFileSync(path.join(INV_DIR, inv.files.pdf)) : INV.invoicePdf(inv, { draftSettings: S }).buffer;
+    return send(res, 200, buf, 'application/pdf', { 'Content-Disposition': `inline; filename="${name}.pdf"` });
+  }
+  const im = p.match(/^\/api\/admin\/invoices\/(\d+)(?:\/(recompute|issue|cancel|paid))?$/);
+  if (!im) return false;
+  const inv = d.invoices.find(i => i.id === +im[1]);
+  if (!inv) throw new Error('Rechnung unbekannt');
+  const act = im[2];
+  if (!act && m === 'GET') {
+    const t = inv.status === 'entwurf' ? INV.totals(inv.items, inv.deposit) : inv.totals;
+    return send(res, 200, { invoice: inv, totals: t, missing: inv.status === 'entwurf' ? INV.checkIssuable(S, inv) : [], settings: S });
+  }
+  if (!act && m === 'PUT') { INV.updateDraft(d, inv, await readJson(req)); store.save(); return send(res, 200, { ok: true }); }
+  if (!act && m === 'DELETE') {
+    if (inv.status !== 'entwurf') throw new Error('Festgeschriebene Rechnungen werden nicht gelöscht, sondern storniert.');
+    d.invoices = d.invoices.filter(i => i.id !== inv.id); store.save(); return send(res, 200, { ok: true });
+  }
+  if (act === 'recompute' && m === 'POST') { INV.recompute(d, inv); store.save(); return send(res, 200, { ok: true }); }
+  if (act === 'issue' && m === 'POST') {
+    const before = structuredClone(d.invoiceSettings.counters);
+    INV.issue(d, inv);
+    try { archive(inv); } catch (e) { inv.status = 'entwurf'; inv.number = null; d.invoiceSettings.counters = before; throw new Error(`Rechnung konnte nicht abgelegt werden: ${e.message}`); }
+    store.save(); return send(res, 200, { ok: true, number: inv.number });
+  }
+  if (act === 'cancel' && m === 'POST') { const st = INV.cancel(d, inv); archive(st); store.save(); return send(res, 200, { ok: true, id: st.id, number: st.number }); }
+  if (act === 'paid' && m === 'PUT') {
+    if (inv.status !== 'ausgestellt') throw new Error('Erst festschreiben.');
+    const { paidAt } = await readJson(req);
+    if (paidAt && !/^\d{4}-\d{2}-\d{2}$/.test(paidAt)) throw new Error('Datum ungültig');
+    inv.paidAt = paidAt || null; store.save(); return send(res, 200, { ok: true });
+  }
   return false;
 }
 

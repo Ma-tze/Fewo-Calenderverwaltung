@@ -48,6 +48,20 @@ In der PC-Ansicht oben auf **👥 Gäste** klicken. Die App führt eine eigene L
 - **Export:** „Export für Excel (CSV)“ liefert eine Zeile pro Aufenthalt, z. B. für einen Anbieterwechsel.
 - **Datenschutz:** Feld „Werbung erlaubt“ je Gast. Gäste, deren letzter Aufenthalt mehr als 3 Jahre zurückliegt, lassen sich gesammelt löschen. Die Gästedatenbank gibt es nur in der PC-Ansicht.
 
+### Rechnungen für Direktgäste
+
+Oben auf **🧾 Rechnungen** klicken.
+
+1. Einmalig **Vermieterdaten und Preise** ausfüllen: Name, Anschrift, Steuernummer, Bank, Rechnungsnummern (Präfix, nächste Nummer), Zahlungsziel, Ist- oder Soll-Versteuerung, Preisbausteine (im Grundpreis enthaltene Personen, Mehrbelegung Erwachsene/Kinder je Nacht, Altersgrenzen, Endreinigung) und Kurtaxe nach Altersgruppen (Satz Hauptsaison und übrige Zeit, Saisons aus ⚙ Einstellungen).
+2. Rechnung anlegen: **👥 Gäste → Gast → beim Aufenthalt „+ Rechnung“**. Gast, Zeitraum, Wohnung und Preis sind vorausgefüllt. Alter der Reisenden eintragen, „Positionen neu berechnen“, bei Bedarf Positionen anpassen und Anzahlung eintragen. Alle Preise sind brutto, die Umsatzsteuer (7 %) wird herausgerechnet, die Kurtaxe bleibt ohne Umsatzsteuer.
+3. **Festschreiben:** Die Rechnung bekommt die nächste Nummer und wird als PDF im Datenordner unter `rechnungen/` abgelegt. Danach ist sie nicht mehr änderbar (GoBD). Korrekturen über **Stornieren** (Stornorechnung mit eigener Nummer).
+4. **E-Rechnung:** Häkchen „Auch als E-Rechnung“. Es entsteht eine XRechnung 3.0 (UN/CEFACT CII) als XML-Datei, zusätzlich in das PDF eingebettet. Die XML-Datei ist die gültige E-Rechnung.
+5. **Bezahlt am** eintragen, damit der Bericht bei Ist-Versteuerung stimmt.
+
+**Umsatzsteuer-Bericht:** In der Rechnungsliste Jahr und Quartal wählen, dann Quartals- oder Jahresbericht als PDF oder CSV. Enthält Kennzahl 86/81 mit Steuer, alle Rechnungen des Zeitraums und getrennt zur Information die Aufenthalte über Airbnb/Booking ohne App-Rechnung.
+
+Wichtig: Der Datenordner (Docker-Volume `fewo-data`) enthält jetzt Rechnungen, die 8 Jahre aufbewahrt werden müssen. Bitte regelmäßig außerhalb des Servers sichern.
+
 ### Smoobu-API einrichten
 
 1. In Smoobu unter **Einstellungen → Erweitert → API-Schlüssel** einen Schlüssel mit Secret erzeugen.

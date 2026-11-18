@@ -44,7 +44,8 @@ export class PdfDoc {
   // grobe Breite (Helvetica): Ziffern 0,556 em, sonst Mittelwert
   static width(s, size) { let w = 0; for (const ch of String(s)) w += (/\d/.test(ch) ? 0.556 : /[il.,:;|' ]/.test(ch) ? 0.28 : /[mwMW]/.test(ch) ? 0.85 : /[A-Z]/.test(ch) ? 0.68 : 0.53) * size; return w; }
 
-  toBuffer(title = 'Fewo-Kalender') {
+  // files: [{ name, data (string|Buffer), mime, desc }] werden als eingebettete Dateien angehängt
+  toBuffer(title = 'Fewo-Kalender', files = []) {
     const objs = [];
     const add = s => { objs.push(s); return objs.length; };
     const catalog = add(null), pagesId = add(null);
@@ -57,7 +58,13 @@ export class PdfDoc {
       const c = add(`<< /Length ${len} >>\nstream\n${stream}\nendstream`);
       kids.push(add(`<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 ${this.W} ${this.H}] /Resources << /Font << /F1 ${f1} 0 R /F2 ${f2} 0 R >> >> /Contents ${c} 0 R >>`));
     }
-    objs[catalog - 1] = `<< /Type /Catalog /Pages ${pagesId} 0 R >>`;
+    const specs = files.map(f => {
+      const data = Buffer.isBuffer(f.data) ? f.data : Buffer.from(f.data, 'utf8');
+      const ef = add(`<< /Type /EmbeddedFile /Subtype /${f.mime.replace('/', '#2F')} /Length ${data.length} /Params << /Size ${data.length} >> >>\nstream\n${data.toString('latin1')}\nendstream`);
+      return add(`<< /Type /Filespec /F (${encodeText(f.name)}) /UF (${encodeText(f.name)}) /Desc (${encodeText(f.desc || f.name)}) /AFRelationship /Alternative /EF << /F ${ef} 0 R /UF ${ef} 0 R >> >>`);
+    });
+    const names = specs.length ? ` /Names << /EmbeddedFiles << /Names [${files.map((f, i) => `(${encodeText(f.name)}) ${specs[i]} 0 R`).join(' ')}] >> >> /AF [${specs.map(sp => `${sp} 0 R`).join(' ')}]` : '';
+    objs[catalog - 1] = `<< /Type /Catalog /Pages ${pagesId} 0 R${names} >>`;
     objs[pagesId - 1] = `<< /Type /Pages /Kids [${kids.map(k => `${k} 0 R`).join(' ')}] /Count ${kids.length} >>`;
     const info = add(`<< /Title (${encodeText(title)}) /Producer (Fewo-Kalender) >>`);
     let out = '%PDF-1.4\n%\xe2\xe3\xcf\xd3\n';
