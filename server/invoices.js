@@ -50,11 +50,18 @@ export function ensure(d) {
   return d;
 }
 
+// IBAN-Prüfziffer nach ISO 13616 (Modulo 97)
+function ibanOk(iban) {
+  const r = (iban.slice(4) + iban.slice(0, 4)).replace(/[A-Z]/g, c => String(c.charCodeAt(0) - 55));
+  let m = 0; for (const ch of r) m = (m * 10 + +ch) % 97;
+  return m === 1;
+}
+
 export function cleanSettings(b, prev) {
   const out = structuredClone(prev);
   if (b.seller) for (const k of Object.keys(out.seller)) if (b.seller[k] !== undefined) out.seller[k] = s(b.seller[k], k === 'name' ? 120 : 200);
   if (out.seller.iban) out.seller.iban = out.seller.iban.replace(/\s/g, '').toUpperCase();
-  if (out.seller.iban && !/^[A-Z]{2}\d{2}[A-Z0-9]{10,30}$/.test(out.seller.iban)) throw new Error('IBAN sieht ungültig aus.');
+  if (out.seller.iban && (!/^[A-Z]{2}\d{2}[A-Z0-9]{10,30}$/.test(out.seller.iban) || !ibanOk(out.seller.iban))) throw new Error('IBAN ist ungültig (Prüfziffer stimmt nicht). Bitte prüfen.');
   if (out.seller.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(out.seller.email)) throw new Error('E-Mail sieht ungültig aus.');
   if (b.numberPrefix !== undefined) out.numberPrefix = s(b.numberPrefix, 10).replace(/[^A-Za-z0-9-]/g, '');
   if (b.paymentDays !== undefined) { const n = Math.trunc(num(b.paymentDays)); if (!(n >= 0 && n <= 120)) throw new Error('Zahlungsziel ungültig'); out.paymentDays = n; }
@@ -342,6 +349,7 @@ export function checkIssuable(S, inv) {
   if (!inv.buyer.name) miss.push('Name des Gastes');
   if (!inv.buyer.street || !inv.buyer.zip || !inv.buyer.city) miss.push('Anschrift des Gastes');
   if (!inv.items.length) miss.push('mindestens eine Position');
+  if (!sl.iban && inv.kind !== 'storno' && totals(inv.items, inv.deposit).due > 0) miss.push('IBAN der Vermieterin (für Überweisung und GiroCode)');
   if (inv.eInvoice) {
     if (!sl.email) miss.push('E-Mail der Vermieterin (für die E-Rechnung)');
     if (!sl.phone) miss.push('Telefon der Vermieterin (für die E-Rechnung)');
@@ -528,6 +536,7 @@ export function invoicePdf(inv, { draftSettings = null, xml = null } = {}) {
       y += qrSize + 18;
     } else {
       for (const p of sched) { doc.text(L, y, `${p.label}: ${eur(p.amount)} fällig bis ${de(p.dueDate)}`, { size: 9.5 }); y += 13; }
+      if (draft) { doc.text(L, y, 'Hinweis (nur im Entwurf): Der GiroCode erscheint, sobald unter „Vermieterdaten und Preise“ Name und IBAN eingetragen sind.', { size: 8.5, bold: true, color: '#b03a2e' }); y += 13; }
     }
     texts.push(`Bitte überweisen Sie ${sched.length > 1 ? 'die Beträge' : 'den Betrag'} zu den genannten Terminen auf das unten genannte Konto. Verwendungszweck: ${ref}.`);
   }

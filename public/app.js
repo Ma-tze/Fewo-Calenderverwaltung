@@ -891,7 +891,7 @@
       </section>
       <section class="sec"><h3>Festschreiben</h3>
         <label class="row">Zahlungsplan <select class="in" data-in="plan" style="width:auto"><option value="auto">nach Zahlungsbedingungen</option><option value="full" ${I.input.plan === 'full' ? 'selected' : ''}>ganzer Betrag auf einmal</option></select></label>
-        ${schedTbl}${schedule.length ? '<p class="small">Fälligkeiten gerechnet ab heute. Auf der Rechnung steht je Zahlung ein QR-Code für die Überweisung.</p>' : ''}
+        ${schedTbl}${schedule.length ? (ivs.cur.settings.seller.iban && ivs.cur.settings.seller.name ? '<p class="small">Fälligkeiten gerechnet ab heute. Auf der Rechnung steht je Zahlung ein QR-Code (GiroCode) für die Überweisung.</p>' : '<div class="notice warn">Der GiroCode fehlt noch: Bitte unter „Vermieterdaten und Preise“ Name und IBAN eintragen.</div>') : ''}
         <label class="row"><input type="checkbox" id="ivE" ${I.eInvoice ? 'checked' : ''}> Auch als E-Rechnung (XRechnung) ausstellen, z. B. wenn eine Firma das verlangt</label>
         ${missing.length ? `<div class="notice warn">Bitte noch ergänzen: ${missing.map(esc).join(', ')}.</div>` : ''}
         <div class="row"><button class="btn primary" type="button" id="ivIssue" ${missing.length ? 'disabled' : ''}>Rechnung festschreiben</button>
