@@ -736,7 +736,7 @@
       <td>${i.date ? dmy(i.date) : '<span class="small">noch nicht festgeschrieben</span>'}</td>
       <td>${esc(i.buyer)}</td><td class="small">${dmy(i.from)} – ${dmy(i.to)}${i.aptName ? ` · ${esc(i.aptName)}` : ''}</td>
       <td style="text-align:right">${euro(i.gross)}</td>
-      <td>${i.status === 'entwurf' ? '<span class="badge off">Entwurf</span>' : i.paidAt ? `<span class="badge ok">${i.kind === 'storno' ? 'erstattet' : 'bezahlt'} ${dmy(i.paidAt)}</span>` : `<span class="badge err">${i.kind === 'storno' ? 'offen' : 'offen'}</span>`}</td></tr>`).join('');
+      <td>${i.status === 'entwurf' ? '<span class="badge off">Entwurf</span>' : i.paidAt ? `<span class="badge ok">${i.kind === 'storno' ? 'erstattet' : 'bezahlt'} ${dmy(i.paidAt)}</span>` : `<span class="badge err">offen ${euro(i.open)}</span>`}</td></tr>`).join('');
     return `<div class="sbody">
       ${L.sellerReady ? '' : '<div class="notice warn">Bitte zuerst unter „Vermieterdaten und Preise“ Name, Anschrift und Steuernummer eintragen.</div>'}
       <section class="sec"><h3>Rechnungen</h3>
@@ -782,6 +782,14 @@
           <label class="wide">Fußzeile (optional)<input class="in" data-iv="footer" value="${esc(S.footer)}"></label></div>
         <p class="small">Beispiel: ${esc(S.numberPrefix ? S.numberPrefix + '-' : '')}${yr}-${String((S.counters[yr] || 0) + 1).padStart(3, '0')}. Hast du dieses Jahr schon Rechnungen auf Papier geschrieben, trag bei „Nächste Nummer“ die folgende Nummer ein. Ist-/Soll-Versteuerung bitte wie beim Finanzamt angemeldet wählen.</p>
       </section>
+      <section class="sec"><h3>Zahlungsbedingungen</h3>
+        <div class="gform">
+          <label>Anzahlung in % (0 = keine Anzahlung)<input class="in" data-pay="depositPercent" value="${S.payment.depositPercent}"></label>
+          <label>Anzahlung fällig innerhalb von (Tagen nach Rechnung)<input class="in" data-pay="depositDays" value="${S.payment.depositDays}"></label>
+          <label>Anzahlung nur, wenn die Anreise mehr als … Tage entfernt ist<input class="in" data-pay="depositIfDaysAhead" value="${S.payment.depositIfDaysAhead}"></label>
+          <label>Restzahlung fällig … Tage vor Anreise<input class="in" data-pay="restDaysBeforeArrival" value="${S.payment.restDaysBeforeArrival}"></label></div>
+        <p class="small">${S.payment.depositPercent > 0 ? `Beispiel: Rechnung heute, Anreise in ${S.payment.depositIfDaysAhead + 30} Tagen: ${S.payment.depositPercent} % Anzahlung in ${S.payment.depositDays} Tagen, Rest ${S.payment.restDaysBeforeArrival} Tage vor Anreise. Bei Anreise in ${S.payment.depositIfDaysAhead} Tagen oder weniger ist der ganze Betrag innerhalb des Zahlungsziels fällig, spätestens am Anreisetag.` : 'Ohne Anzahlung ist der ganze Betrag innerhalb des Zahlungsziels fällig, spätestens am Anreisetag.'} Auf der Rechnung steht für jede Zahlung ein QR-Code (GiroCode) für die Banking-App.</p>
+      </section>
       <section class="sec"><h3>Preisbausteine (Bruttopreise)</h3>
         <div class="gform">
           <label>Im Grundpreis enthaltene Personen<input class="in" data-pr="includedPersons" value="${P.includedPersons}"></label>
@@ -801,7 +809,8 @@
   }
 
   function invEditor() {
-    const { invoice: I, totals: T, missing } = ivs.cur;
+    const { invoice: I, totals: T, missing, schedule, payments, open } = ivs.cur;
+    const schedTbl = schedule.length ? `<div class="tbl"><table style="min-width:0"><thead><tr><th>Zahlung</th><th style="text-align:right">Betrag</th><th>fällig bis</th></tr></thead><tbody>${schedule.map(p => `<tr><td>${esc(p.label)}</td><td style="text-align:right">${euro(p.amount)}</td><td>${dmy(p.dueDate)}</td></tr>`).join('')}</tbody></table></div>` : '';
     const draft = I.status === 'entwurf';
     const b = I.buyer;
     const head = `<div class="row"><button class="btn" type="button" id="ivBack">◀ Rechnungen</button>${I.guestId ? '<button class="btn" type="button" id="ivGuest">Zum Gast</button>' : ''}
@@ -817,8 +826,13 @@
         <section class="sec"><h3>${I.kind === 'storno' ? 'Stornorechnung' : 'Rechnung'} ${esc(I.number)} ${I.cancelledBy ? '<span class="badge off">storniert</span>' : ''}</h3>
           <p class="d">Festgeschrieben am ${dmy(I.date)} für ${esc(b.name)}, ${dmy(I.from)} bis ${dmy(I.to)}${I.aptName ? `, ${esc(I.aptName)}` : ''}.${I.kind === 'storno' ? ` Storniert Rechnung ${esc(I.refNumber)}.` : ''}${I.eInvoice ? ' Mit E-Rechnung (XRechnung).' : ''}</p>
           ${sums}
-          <div class="row">${I.kind === 'storno' ? 'Erstattet am' : 'Bezahlt am'} <input class="in" type="date" id="ivPaid" value="${I.paidAt || ''}" style="width:auto"> <button class="mini" type="button" id="ivPaidToday">heute</button>
-            ${I.paidAt ? '<button class="mini" type="button" id="ivPaidClear">zurücksetzen</button>' : ''}</div>
+          ${schedTbl}
+          <h3 style="font-size:1.05em">${I.kind === 'storno' ? 'Erstattungen' : 'Zahlungseingänge'}</h3>
+          <div class="tbl"><table style="min-width:0"><thead><tr><th>Datum</th><th style="text-align:right">Betrag</th><th>Notiz</th><th></th></tr></thead><tbody>
+            ${payments.map(p => `<tr><td>${dmy(p.date)}</td><td style="text-align:right">${euro(p.amount)}</td><td class="small">${esc(p.note || '')}</td><td>${p.implicit ? '' : `<button class="mini" type="button" data-paydel="${p.id}" aria-label="Zahlung löschen">✕</button>`}</td></tr>`).join('') || '<tr><td colspan="4" class="small">Noch keine Zahlung erfasst.</td></tr>'}</tbody></table></div>
+          ${open > 0.005 ? `<div class="row"><b>Offen: ${euro(open)}</b> · ${I.kind === 'storno' ? 'Erstattet' : 'Eingang'} am <input class="in" type="date" id="payDate" value="${iso(new Date())}" style="width:auto">
+            Betrag <input class="in short" id="payAmt" value="${num2(nextInstallment(schedule, payments, open))}" style="width:100px"> <input class="in" id="payNote" placeholder="Notiz, z. B. Anzahlung" style="width:180px">
+            <button class="mini" type="button" id="payAdd">Zahlung erfassen</button></div>` : `<div class="row"><span class="badge ok">${I.kind === 'storno' ? 'vollständig erstattet' : 'vollständig bezahlt'}${I.paidAt ? ` am ${dmy(I.paidAt)}` : ''}</span></div>`}
           ${I.kind === 'rechnung' && !I.cancelledBy ? '<div class="row"><button class="mini" type="button" id="ivCancel">Rechnung stornieren</button><span class="small">Erstellt eine Stornorechnung mit neuer Nummer. Danach kannst du beim Gast eine neue Rechnung schreiben.</span></div>' : ''}
         </section></div>`;
     }
@@ -862,6 +876,8 @@
         ${sums}
       </section>
       <section class="sec"><h3>Festschreiben</h3>
+        <label class="row">Zahlungsplan <select class="in" data-in="plan" style="width:auto"><option value="auto">nach Zahlungsbedingungen</option><option value="full" ${I.input.plan === 'full' ? 'selected' : ''}>ganzer Betrag auf einmal</option></select></label>
+        ${schedTbl}${schedule.length ? '<p class="small">Fälligkeiten gerechnet ab heute. Auf der Rechnung steht je Zahlung ein QR-Code für die Überweisung.</p>' : ''}
         <label class="row"><input type="checkbox" id="ivE" ${I.eInvoice ? 'checked' : ''}> Auch als E-Rechnung (XRechnung) ausstellen, z. B. wenn eine Firma das verlangt</label>
         ${missing.length ? `<div class="notice warn">Bitte noch ergänzen: ${missing.map(esc).join(', ')}.</div>` : ''}
         <div class="row"><button class="btn primary" type="button" id="ivIssue" ${missing.length ? 'disabled' : ''}>Rechnung festschreiben</button>
@@ -876,6 +892,14 @@
     const y = window.scrollY;
     await renderInvoices();
     window.scrollTo(0, y);
+  }
+
+  // Vorschlag für den nächsten Zahlungsbetrag: nächste offene Rate laut Zahlungsplan
+  function nextInstallment(schedule, payments, open) {
+    const paid = (payments || []).filter(p => !p.implicit).reduce((a, p) => a + p.amount, 0);
+    let acc = 0;
+    for (const s of schedule || []) { acc += s.amount; if (paid < acc - 0.005) return Math.min(open, Math.round((acc - paid) * 100) / 100); }
+    return open;
   }
 
   function openInvoice(id) { state.view = 'invoices'; ivs.page = 'edit'; ivs.id = id; render(); window.scrollTo(0, 0); }
@@ -899,6 +923,7 @@
       $$('[data-sl]').forEach(i => i.onchange = () => save({ seller: { [i.dataset.sl]: i.value } }));
       $$('[data-iv]').forEach(i => i.onchange = () => save({ [i.dataset.iv]: i.value }));
       $$('[data-pr]').forEach(i => i.onchange = () => save({ pricing: { [i.dataset.pr]: i.value } }));
+      $$('[data-pay]').forEach(i => i.onchange = () => save({ payment: { [i.dataset.pay]: i.value } }));
       $('#ivNext').onchange = e => save({ nextNumber: { year: new Date().getFullYear(), value: e.target.value } });
       $('#ktLabel').onchange = e => save({ kurtaxe: { label: e.target.value } });
       const groups = () => S.kurtaxe.groups.map(g => ({ ...g }));
@@ -911,9 +936,11 @@
     const url = `/api/admin/invoices/${I.id}`;
     if ($('#ivGuest')) $('#ivGuest').onclick = () => { state.view = 'guests'; gst.id = I.guestId; render(); window.scrollTo(0, 0); };
     if (I.status !== 'entwurf') {
-      $('#ivPaid').onchange = e => iAct(() => put(`${url}/paid`, { paidAt: e.target.value }), 'Zahlung gespeichert.');
-      $('#ivPaidToday').onclick = () => iAct(() => put(`${url}/paid`, { paidAt: iso(new Date()) }), 'Zahlung gespeichert.');
-      if ($('#ivPaidClear')) $('#ivPaidClear').onclick = () => iAct(() => put(`${url}/paid`, { paidAt: '' }), 'Zurückgesetzt.');
+      if ($('#payAdd')) $('#payAdd').onclick = () => iAct(() => post(`${url}/payments`, { date: $('#payDate').value, amount: $('#payAmt').value, note: $('#payNote').value }), 'Zahlung erfasst.');
+      $$('[data-paydel]').forEach(b => b.onclick = () => {
+        if (b.dataset.armed !== '1') { b.dataset.armed = '1'; b.textContent = 'Löschen?'; b.classList.add('danger'); return; }
+        iAct(() => api(`${url}/payments/${b.dataset.paydel}`, { method: 'DELETE' }), 'Zahlung gelöscht.');
+      });
       if ($('#ivCancel')) $('#ivCancel').onclick = () => {
         const b = $('#ivCancel');
         if (b.dataset.armed !== '1') { b.dataset.armed = '1'; b.textContent = 'Wirklich stornieren?'; b.classList.add('danger'); return; }

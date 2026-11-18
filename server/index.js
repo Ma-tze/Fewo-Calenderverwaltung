@@ -534,7 +534,7 @@ function archive(inv) {
 function invSummary(d, i) {
   const t = i.status === 'entwurf' ? INV.totals(i.items, i.deposit) : i.totals;
   return { id: i.id, number: i.number, kind: i.kind, status: i.status, date: i.date || null, from: i.from, to: i.to, buyer: i.buyer.name, guestId: i.guestId, stayId: i.stayId,
-    gross: t.gross, due: t.due, paidAt: i.paidAt || null, eInvoice: !!i.eInvoice, cancelledBy: i.cancelledBy || null, refNumber: i.refNumber || null, aptName: i.aptName };
+    gross: t.gross, due: t.due, paidAt: i.paidAt || null, open: INV.openAmount(i), eInvoice: !!i.eInvoice, cancelledBy: i.cancelledBy || null, refNumber: i.refNumber || null, aptName: i.aptName };
 }
 
 async function handleInvoices(req, res, p, m, d, url) {
@@ -579,14 +579,23 @@ async function handleInvoices(req, res, p, m, d, url) {
     const buf = inv.status === 'ausgestellt' && inv.files?.pdf ? fs.readFileSync(path.join(INV_DIR, inv.files.pdf)) : INV.invoicePdf(inv, { draftSettings: S }).buffer;
     return send(res, 200, buf, 'application/pdf', { 'Content-Disposition': `inline; filename="${name}.pdf"` });
   }
-  const im = p.match(/^\/api\/admin\/invoices\/(\d+)(?:\/(recompute|issue|cancel|paid))?$/);
+  const pm = p.match(/^\/api\/admin\/invoices\/(\d+)\/payments(?:\/(\d+))?$/);
+  if (pm) {
+    const inv = d.invoices.find(i => i.id === +pm[1]);
+    if (!inv) throw new Error('Rechnung unbekannt');
+    if (m === 'POST' && !pm[2]) { INV.addPayment(inv, await readJson(req)); store.save(); return send(res, 200, { ok: true }); }
+    if (m === 'DELETE' && pm[2]) { INV.removePayment(inv, +pm[2]); store.save(); return send(res, 200, { ok: true }); }
+  }
+  const im = p.match(/^\/api\/admin\/invoices\/(\d+)(?:\/(recompute|issue|cancel))?$/);
   if (!im) return false;
   const inv = d.invoices.find(i => i.id === +im[1]);
   if (!inv) throw new Error('Rechnung unbekannt');
   const act = im[2];
   if (!act && m === 'GET') {
     const t = inv.status === 'entwurf' ? INV.totals(inv.items, inv.deposit) : inv.totals;
-    return send(res, 200, { invoice: inv, totals: t, missing: inv.status === 'entwurf' ? INV.checkIssuable(S, inv) : [], settings: S });
+    const today = new Date().toISOString().slice(0, 10);
+    return send(res, 200, { invoice: inv, totals: t, missing: inv.status === 'entwurf' ? INV.checkIssuable(S, inv) : [], settings: S,
+      schedule: inv.status === 'entwurf' ? INV.paymentSchedule(S, inv, today) : inv.schedule || [], payments: INV.paymentsOf(inv), open: INV.openAmount(inv) });
   }
   if (!act && m === 'PUT') { INV.updateDraft(d, inv, await readJson(req)); store.save(); return send(res, 200, { ok: true }); }
   if (!act && m === 'DELETE') {
@@ -601,12 +610,6 @@ async function handleInvoices(req, res, p, m, d, url) {
     store.save(); return send(res, 200, { ok: true, number: inv.number });
   }
   if (act === 'cancel' && m === 'POST') { const st = INV.cancel(d, inv); archive(st); store.save(); return send(res, 200, { ok: true, id: st.id, number: st.number }); }
-  if (act === 'paid' && m === 'PUT') {
-    if (inv.status !== 'ausgestellt') throw new Error('Erst festschreiben.');
-    const { paidAt } = await readJson(req);
-    if (paidAt && !/^\d{4}-\d{2}-\d{2}$/.test(paidAt)) throw new Error('Datum ungültig');
-    inv.paidAt = paidAt || null; store.save(); return send(res, 200, { ok: true });
-  }
   return false;
 }
 

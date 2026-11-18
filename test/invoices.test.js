@@ -86,14 +86,50 @@ test('USt-Bericht: Ist-Versteuerung nach Zahlung, Soll nach Abreise, Portal-Aufe
   const { d, inv } = setup();
   I.issue(d, inv, '2026-07-04');
   d.stays.push({ id: 2, status: 'ok', price: 535, start: '2026-08-01', end: '2026-08-06', channel: 'Airbnb' }, { id: 1, status: 'ok', price: 693, start: inv.from, end: inv.to });
+  // Ist: zunächst nur die vor der Rechnung erhaltene Anzahlung (200 €), anteilig auf 7 % und Kurtaxe
   let rep = I.vatReport(d, I.periodOf('quartal', 2026, 3));
-  assert.equal(rep.rows.length, 0); assert.equal(rep.unpaid, 1);
-  inv.paidAt = '2026-07-08';
+  assert.equal(rep.rows.length, 1); assert.equal(rep.rows[0].gross, 200); assert.equal(rep.unpaid, 1);
+  assert.throws(() => I.addPayment(inv, { date: '2026-07-08', amount: 900 }), /höher als der offene Betrag/);
+  I.addPayment(inv, { date: '2026-07-08', amount: '822,70' });
+  assert.equal(inv.paidAt, '2026-07-08');
   rep = I.vatReport(d, I.periodOf('quartal', 2026, 3));
   assert.deepEqual(rep.kz, { kz86: 906.54, tax7: 63.46, kz81: 0, tax19: 0 });
   assert.deepEqual(rep.other, { count: 1, gross: 535, net: 500, tax: 35, byChannel: [['Airbnb', 535]] });
-  d.invoiceSettings.taxation = 'soll'; inv.paidAt = null;
+  assert.equal(rep.unpaid, 0);
+  d.invoiceSettings.taxation = 'soll'; I.removePayment(inv, 1);
   assert.equal(I.vatReport(d, I.periodOf('jahr', 2026)).rows.length, 1);
   assert.ok(I.vatReportPdf(rep).toString('latin1').startsWith('%PDF'));
   assert.match(I.vatReportCsv(rep), /R-2026-001;rechnung;2026-07-04/);
+});
+
+test('Zahlungsplan: Anzahlung nur bei Buchung weit genug im Voraus, sonst ganzer Betrag', () => {
+  const { d, inv } = setup();
+  d.invoiceSettings = I.cleanSettings({ payment: { depositPercent: 30, depositDays: 7, depositIfDaysAhead: 30, restDaysBeforeArrival: 14 } }, d.invoiceSettings);
+  // Rechnung am 1.3. für Anreise 27.6.: Anzahlung 30 % von 822,70 bis 8.3., Rest bis 13.6.
+  assert.deepEqual(I.paymentSchedule(d.invoiceSettings, inv, '2026-03-01'), [
+    { label: 'Anzahlung (30 %)', amount: 246.81, dueDate: '2026-03-08' }, { label: 'Restzahlung', amount: 575.89, dueDate: '2026-06-13' }]);
+  // kurzfristig (20 Tage vorher): alles, spätestens zur Anreise
+  assert.deepEqual(I.paymentSchedule(d.invoiceSettings, inv, '2026-06-07'), [{ label: 'Gesamtbetrag', amount: 822.7, dueDate: '2026-06-21' }]);
+  assert.deepEqual(I.paymentSchedule(d.invoiceSettings, inv, '2026-06-20'), [{ label: 'Gesamtbetrag', amount: 822.7, dueDate: '2026-06-27' }]);
+  I.updateDraft(d, inv, { input: { plan: 'full' } });
+  assert.equal(I.paymentSchedule(d.invoiceSettings, inv, '2026-03-01').length, 1);
+  I.updateDraft(d, inv, { input: { plan: 'auto' } });
+  I.issue(d, inv, '2026-03-01');
+  assert.equal(inv.schedule.length, 2); assert.equal(inv.dueDate, '2026-06-13');
+  const xml = I.xrechnungXml(inv);
+  assert.match(xml, /Anzahlung \(30 %\): 246,81 € bis 08.03.2026; Restzahlung: 575,89 € bis 13.06.2026/);
+  const pdf = I.invoicePdf(inv).buffer.toString('latin1');
+  assert.match(pdf, /Zahlungsplan/);
+});
+
+test('QR-Code für die Überweisung (GiroCode)', async () => {
+  const { qrMatrix, epcPayload } = await import('../server/qr.js');
+  const t = epcPayload({ name: 'Erika Muster', iban: 'DE02 1203 0000 0000 2020 51', bic: 'BYLADEM1001', amount: 280.92, text: 'R-2026-001 Anzahlung' });
+  assert.equal(t, 'BCD\n002\n1\nSCT\nBYLADEM1001\nErika Muster\nDE02120300000000202051\nEUR280.92\n\n\nR-2026-001 Anzahlung');
+  const m = qrMatrix(t);
+  assert.equal(m.length, 41); // Version 6 bei Fehlerkorrektur M (mit zxing-cpp gegengelesen, siehe PR)
+  // Suchmuster oben links: 7x7 Rahmen
+  assert.deepEqual(m[0].slice(0, 7), Array(7).fill(true));
+  assert.deepEqual(m[1].slice(0, 7), [true, false, false, false, false, false, true]);
+  assert.throws(() => epcPayload({ name: 'X', iban: '', amount: 1 }));
 });

@@ -56,7 +56,9 @@ Oben auf **🧾 Rechnungen** klicken.
 2. Rechnung anlegen: **👥 Gäste → Gast → beim Aufenthalt „+ Rechnung“**. Gast, Zeitraum, Wohnung und Preis sind vorausgefüllt. Alter der Reisenden eintragen, „Positionen neu berechnen“, bei Bedarf Positionen anpassen und Anzahlung eintragen. Alle Preise sind brutto, die Umsatzsteuer (7 %) wird herausgerechnet, die Kurtaxe bleibt ohne Umsatzsteuer.
 3. **Festschreiben:** Die Rechnung bekommt die nächste Nummer und wird als PDF im Datenordner unter `rechnungen/` abgelegt. Danach ist sie nicht mehr änderbar (GoBD). Korrekturen über **Stornieren** (Stornorechnung mit eigener Nummer).
 4. **E-Rechnung:** Häkchen „Auch als E-Rechnung“. Es entsteht eine XRechnung 3.0 (UN/CEFACT CII) als XML-Datei, zusätzlich in das PDF eingebettet. Die XML-Datei ist die gültige E-Rechnung.
-5. **Bezahlt am** eintragen, damit der Bericht bei Ist-Versteuerung stimmt.
+5. **Zahlungsplan:** Unter „Vermieterdaten und Preise → Zahlungsbedingungen“ Anzahlung in %, deren Frist, ab wie vielen Tagen vor Anreise eine Anzahlung verlangt wird und wann die Restzahlung fällig ist. Ist die Anreise näher, ist der ganze Betrag fällig (spätestens am Anreisetag). Je Rechnung lässt sich „ganzer Betrag auf einmal“ wählen.
+6. **QR-Code:** Für jede Zahlung (Anzahlung, Rest oder Gesamtbetrag) steht ein GiroCode auf der Rechnung, den der Gast mit der Banking-App scannt. Voraussetzung: IBAN und Name in den Vermieterdaten.
+7. **Zahlungseingänge** in der Rechnung erfassen (Datum, Betrag). Bei Ist-Versteuerung zählt der Bericht genau diese Zahlungen, anteilig nach Steuersatz.
 
 **Umsatzsteuer-Bericht:** In der Rechnungsliste Jahr und Quartal wählen, dann Quartals- oder Jahresbericht als PDF oder CSV. Enthält Kennzahl 86/81 mit Steuer, alle Rechnungen des Zeitraums und getrennt zur Information die Aufenthalte über Airbnb/Booking ohne App-Rechnung.
 

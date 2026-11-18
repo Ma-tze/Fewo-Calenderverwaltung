@@ -4,6 +4,7 @@
 
 import { PdfDoc } from './pdf.js';
 import { expandSeasons } from './holidays.js';
+import { qrMatrix, epcPayload } from './qr.js';
 
 const r2 = v => Math.round((v + Number.EPSILON) * 100) / 100;
 const s = (v, n) => String(v ?? '').slice(0, n).trim();
@@ -24,6 +25,7 @@ const num = v => {
 export const DEFAULT_SETTINGS = () => ({
   seller: { name: '', street: '', zip: '', city: '', country: 'DE', phone: '', email: '', taxNumber: '', vatId: '', iban: '', bic: '', bank: '', accountHolder: '' },
   numberPrefix: 'R', counters: {}, paymentDays: 14, vatRate: 7, taxation: 'ist', footer: '',
+  payment: { depositPercent: 0, depositDays: 7, depositIfDaysAhead: 30, restDaysBeforeArrival: 14 },
   pricing: { includedPersons: 2, extraAdult: 0, extraChild: 0, childMaxAge: 15, infantMaxAge: 2, cleaning: 0 },
   kurtaxe: { label: 'Kurtaxe', groups: [
     { label: 'Kinder bis 5 Jahre', ageFrom: 0, ageTo: 5, rate: 0, rateNeben: null },
@@ -35,7 +37,7 @@ export const DEFAULT_SETTINGS = () => ({
 export function ensure(d) {
   const def = DEFAULT_SETTINGS();
   const cur = d.invoiceSettings || {};
-  d.invoiceSettings = { ...def, ...cur, seller: { ...def.seller, ...(cur.seller || {}) }, pricing: { ...def.pricing, ...(cur.pricing || {}) },
+  d.invoiceSettings = { ...def, ...cur, seller: { ...def.seller, ...(cur.seller || {}) }, payment: { ...def.payment, ...(cur.payment || {}) }, pricing: { ...def.pricing, ...(cur.pricing || {}) },
     kurtaxe: { ...def.kurtaxe, ...(cur.kurtaxe || {}) }, counters: { ...(cur.counters || {}) } };
   d.invoices ||= [];
   return d;
@@ -58,6 +60,11 @@ export function cleanSettings(b, prev) {
     const used = Math.max(0, ...out.counters[year] ? [out.counters[year]] : [0]);
     if (v <= used) throw new Error(`Für ${year} wurde schon bis Nummer ${used} vergeben. Die nächste Nummer muss größer sein.`);
     out.counters[year] = v - 1;
+  }
+  if (b.payment) for (const k of Object.keys(out.payment)) if (b.payment[k] !== undefined) {
+    const v = Math.trunc(num(b.payment[k]));
+    if (!Number.isFinite(v) || v < 0 || v > (k === 'depositPercent' ? 100 : 730)) throw new Error('Zahlungsbedingung ungültig');
+    out.payment[k] = v;
   }
   if (b.pricing) for (const k of Object.keys(out.pricing)) if (b.pricing[k] !== undefined) {
     const v = num(b.pricing[k]); if (!Number.isFinite(v) || v < 0 || v > 1e5) throw new Error('Preisbaustein ungültig'); out.pricing[k] = r2(v);
@@ -155,6 +162,67 @@ export function totals(items, deposit = 0) {
   return { lines, vat, gross, net, tax, deposit: dep, due: r2(gross - dep) };
 }
 
+/* ---------- Zahlungsplan und Zahlungen ---------- */
+
+/**
+ * Anzahlung (Prozent, Frist ab Rechnungsdatum), wenn die Anreise mehr als depositIfDaysAhead Tage entfernt ist;
+ * Restzahlung dann restDaysBeforeArrival Tage vor Anreise. Sonst ist der ganze Betrag fällig.
+ */
+export function paymentSchedule(S, inv, date) {
+  const t = totals(inv.items, inv.deposit);
+  if (inv.kind === 'storno' || !(t.due > 0)) return [];
+  const P = S.payment;
+  const ahead = nightsOf(date, inv.from);
+  const fullDue = () => { const d = addDays(date, S.paymentDays); return ahead > 0 && d > inv.from ? inv.from : d; };
+  if (inv.input?.plan !== 'full' && P.depositPercent > 0 && P.depositPercent < 100 && ahead > P.depositIfDaysAhead) {
+    const dep = r2(t.due * P.depositPercent / 100);
+    const depDue = addDays(date, P.depositDays);
+    let restDue = addDays(inv.from, -P.restDaysBeforeArrival);
+    if (restDue < depDue) restDue = depDue;
+    return [{ label: `Anzahlung (${P.depositPercent} %)`, amount: dep, dueDate: depDue }, { label: 'Restzahlung', amount: r2(t.due - dep), dueDate: restDue }];
+  }
+  return [{ label: 'Gesamtbetrag', amount: t.due, dueDate: fullDue() }];
+}
+
+// Zahlungen: eine vor der Rechnung erhaltene Anzahlung zählt zum Rechnungsdatum
+export function paymentsOf(inv) {
+  const list = [...(inv.payments || [])];
+  if (inv.status === 'ausgestellt' && inv.deposit) list.unshift({ id: 0, date: inv.date, amount: Math.abs(inv.deposit), note: 'vor Rechnung erhalten', implicit: true });
+  return list.sort((a, b) => (a.date < b.date ? -1 : 1));
+}
+
+export function openAmount(inv) {
+  if (inv.status !== 'ausgestellt') return null;
+  const paid = r2((inv.payments || []).reduce((a, p) => a + p.amount, 0));
+  return r2(Math.abs(inv.totals.due) - paid);
+}
+
+function refreshPaid(inv) {
+  const due = Math.abs(inv.totals.due);
+  let sum = 0; inv.paidAt = null;
+  for (const p of [...(inv.payments || [])].sort((a, b) => (a.date < b.date ? -1 : 1))) { sum = r2(sum + p.amount); if (sum >= due - 0.005) { inv.paidAt = p.date; break; } }
+  if (!(due > 0.005) && (inv.payments || []).length === 0 && inv.kind === 'rechnung') inv.paidAt = inv.date;
+}
+
+export function addPayment(inv, b) {
+  if (inv.status !== 'ausgestellt') throw new Error('Erst festschreiben.');
+  const date = String(b.date || '');
+  if (!isDay(date)) throw new Error('Bitte ein Datum angeben.');
+  const amount = r2(num(b.amount));
+  if (!(amount > 0 && amount < 1e6)) throw new Error('Betrag ungültig');
+  if (amount > openAmount(inv) + 0.005) throw new Error(`Der Betrag ist höher als der offene Betrag (${eur(openAmount(inv))}).`);
+  inv.payments ||= [];
+  const p = { id: inv.payments.reduce((m, x) => Math.max(m, x.id), 0) + 1, date, amount, note: s(b.note, 80) };
+  inv.payments.push(p);
+  refreshPaid(inv);
+  return p;
+}
+
+export function removePayment(inv, pid) {
+  inv.payments = (inv.payments || []).filter(p => p.id !== pid);
+  refreshPaid(inv);
+}
+
 /* ---------- Entwürfe, Festschreiben, Storno ---------- */
 
 const nextId = list => list.reduce((m, e) => Math.max(m, e.id), 0) + 1;
@@ -200,6 +268,7 @@ export function updateDraft(d, inv, b) {
     if (b.input.perNight !== undefined) inv.input.perNight = r2(num(b.input.perNight));
     if (b.input.ages !== undefined) inv.input.ages = (Array.isArray(b.input.ages) ? b.input.ages : String(b.input.ages).split(/[,;\s]+/)).filter(x => x !== '').map(x => Math.trunc(num(x))).filter(a => a >= 0 && a <= 120).slice(0, 20);
     if (b.input.cleaning !== undefined) inv.input.cleaning = !!b.input.cleaning;
+    if (b.input.plan !== undefined) inv.input.plan = b.input.plan === 'full' ? 'full' : 'auto';
   }
   if (b.items) inv.items = cleanItems(b.items);
   if (b.deposit !== undefined) { const v = r2(num(b.deposit)); if (!(v >= 0 && v < 1e6)) throw new Error('Anzahlung ungültig'); inv.deposit = v; }
@@ -245,12 +314,15 @@ export function issue(d, inv, today = new Date().toISOString().slice(0, 10)) {
   if (miss.length) throw new Error(`Bitte noch ergänzen: ${miss.join(', ')}.`);
   inv.number = nextNumber(S, +today.slice(0, 4));
   inv.date = today;
-  inv.dueDate = addDays(today, S.paymentDays);
+  inv.schedule = paymentSchedule(S, inv, today);
+  inv.dueDate = inv.schedule.length ? inv.schedule[inv.schedule.length - 1].dueDate : today;
   inv.seller = structuredClone(S.seller);
   inv.footer = S.footer;
   inv.totals = totals(inv.items, inv.deposit);
   inv.status = 'ausgestellt';
   inv.issuedAt = new Date().toISOString();
+  inv.payments = [];
+  refreshPaid(inv);
   return inv;
 }
 
@@ -268,7 +340,7 @@ export function cancel(d, inv, today = new Date().toISOString().slice(0, 10)) {
   st.date = today; st.dueDate = today;
   st.seller = structuredClone(inv.seller); st.footer = inv.footer;
   st.totals = totals(st.items, st.deposit);
-  st.status = 'ausgestellt'; st.issuedAt = new Date().toISOString();
+  st.status = 'ausgestellt'; st.issuedAt = new Date().toISOString(); st.schedule = []; st.payments = [];
   inv.cancelledBy = st.id;
   d.invoices.push(st);
   return st;
@@ -311,7 +383,7 @@ export function invoicePdf(inv, { draftSettings = null, xml = null } = {}) {
   for (const [k, v] of meta) { doc.text(340, ry, k, { size: 8.5, color: MUTED }); doc.text(430, ry, v, { size: 8.5 }); ry += 12; }
   y = Math.max(y, ry) + 26;
   doc.text(L, y, `${title}${inv.number ? ` ${inv.number}` : ''}`, { size: 16, bold: true }); y += 20;
-  const intro = inv.kind === 'storno' ? `hiermit stornieren wir die Rechnung ${inv.refNumber} vollständig.` : `vielen Dank für Ihren Aufenthalt${inv.aptName ? ` in ${inv.aptName}` : ''}. Wir berechnen Ihnen:`;
+  const intro = inv.kind === 'storno' ? `hiermit stornieren wir die Rechnung ${inv.refNumber} vollständig.` : `vielen Dank für Ihre${inv.from > (inv.date || new Date().toISOString().slice(0, 10)) ? ' Buchung' : 'n Aufenthalt'}${inv.aptName ? ` in ${inv.aptName}` : ''}. Wir berechnen Ihnen:`;
   doc.text(L, y, `Guten Tag ${inv.buyer.name},`, { size: 10 }); y += 14;
   doc.text(L, y, intro, { size: 10 }); y += 22;
   // Tabelle
@@ -352,7 +424,33 @@ export function invoicePdf(inv, { draftSettings = null, xml = null } = {}) {
   row(inv.kind === 'storno' ? 'Gutschrift' : 'Zu zahlen', eur(t.due), { bold: true, size: 11 });
   y += 10;
   const texts = [];
-  if (inv.kind === 'rechnung' && t.due > 0) texts.push(`Bitte überweisen Sie den Betrag bis zum ${de(inv.dueDate) || '…'} auf das unten genannte Konto. Verwendungszweck: ${inv.number || 'Rechnungsnummer'}.`);
+  const sched = draft ? paymentSchedule(draftSettings, inv, new Date().toISOString().slice(0, 10)) : inv.schedule || [];
+  if (sched.length) {
+    const ref = inv.number || 'Rechnungsnummer';
+    const qrSize = 78, withQr = !!(sl.iban && sl.name);
+    const blockH = withQr ? qrSize + 26 : 16;
+    if (y + 30 + blockH > 760) { doc.newPage(); y = 60; }
+    doc.text(L, y, sched.length > 1 ? 'Zahlungsplan' : 'Zahlung', { size: 10.5, bold: true }); y += 16;
+    if (withQr) {
+      const colW = (R - L) / Math.max(2, sched.length);
+      sched.forEach((p, k) => {
+        const x0 = L + k * colW;
+        const m = qrMatrix(epcPayload({ name: sl.accountHolder || sl.name, iban: sl.iban, bic: sl.bic, amount: p.amount, text: `${ref} ${p.label.replace(/ \(.*\)/, '')}` }));
+        const cell = qrSize / m.length;
+        doc.fill('#000000');
+        m.forEach((row, yy) => row.forEach((dk, xx) => { if (dk) doc.rect(x0 + xx * cell, y + yy * cell, cell + 0.05, cell + 0.05); }));
+        doc.text(x0 + qrSize + 12, y + 14, p.label, { size: 9.5, bold: true });
+        doc.text(x0 + qrSize + 12, y + 30, eur(p.amount), { size: 12, bold: true });
+        doc.text(x0 + qrSize + 12, y + 46, `fällig bis ${de(p.dueDate)}`, { size: 9.5 });
+        doc.text(x0 + qrSize + 12, y + 60, 'QR-Code mit der Banking-App', { size: 7.5, color: MUTED });
+        doc.text(x0 + qrSize + 12, y + 70, 'scannen (GiroCode)', { size: 7.5, color: MUTED });
+      });
+      y += qrSize + 18;
+    } else {
+      for (const p of sched) { doc.text(L, y, `${p.label}: ${eur(p.amount)} fällig bis ${de(p.dueDate)}`, { size: 9.5 }); y += 13; }
+    }
+    texts.push(`Bitte überweisen Sie ${sched.length > 1 ? 'die Beträge' : 'den Betrag'} zu den genannten Terminen auf das unten genannte Konto. Verwendungszweck: ${ref}.`);
+  }
   if (inv.note) texts.push(inv.note);
   if (inv.buyer.vatId) texts.push(`USt-IdNr. des Leistungsempfängers: ${inv.buyer.vatId}`);
   if (xml) texts.push('Diese Rechnung enthält eine E-Rechnung (XRechnung) als eingebettete Datei.');
@@ -451,7 +549,7 @@ export function xrechnungXml(inv) {
         <ram:PayeeSpecifiedCreditorFinancialInstitution><ram:BICID>${x(sl.bic)}</ram:BICID></ram:PayeeSpecifiedCreditorFinancialInstitution>` : ''}
       </ram:SpecifiedTradeSettlementPaymentMeans>${taxes}
       <ram:BillingSpecifiedPeriod><ram:StartDateTime><udt:DateTimeString format="102">${ymd(inv.from)}</udt:DateTimeString></ram:StartDateTime><ram:EndDateTime><udt:DateTimeString format="102">${ymd(inv.to)}</udt:DateTimeString></ram:EndDateTime></ram:BillingSpecifiedPeriod>
-      <ram:SpecifiedTradePaymentTerms>${storno ? '<ram:Description>Gutschrift wird erstattet.</ram:Description>' : `<ram:Description>Zahlbar bis ${de(inv.dueDate)} ohne Abzug.</ram:Description><ram:DueDateDateTime><udt:DateTimeString format="102">${ymd(inv.dueDate)}</udt:DateTimeString></ram:DueDateDateTime>`}</ram:SpecifiedTradePaymentTerms>
+      <ram:SpecifiedTradePaymentTerms>${storno || !(inv.schedule || []).length ? `<ram:Description>${storno ? 'Gutschrift wird erstattet.' : 'Bereits bezahlt.'}</ram:Description>` : `<ram:Description>${x(inv.schedule.map(p => `${p.label}: ${eur(p.amount)} bis ${de(p.dueDate)}`).join('; '))}. Ohne Abzug.</ram:Description><ram:DueDateDateTime><udt:DateTimeString format="102">${ymd(inv.schedule[0].dueDate)}</udt:DateTimeString></ram:DueDateDateTime>`}</ram:SpecifiedTradePaymentTerms>
       <ram:SpecifiedTradeSettlementHeaderMonetarySummation>
         <ram:LineTotalAmount>${a2(sign * t.net)}</ram:LineTotalAmount>
         <ram:TaxBasisTotalAmount>${a2(sign * t.net)}</ram:TaxBasisTotalAmount>
@@ -483,16 +581,31 @@ export function periodOf(kind, year, q) {
 export function vatReport(d, period, today = new Date().toISOString().slice(0, 10)) {
   ensure(d);
   const S = d.invoiceSettings;
-  const keyDate = inv => (S.taxation === 'ist' ? inv.paidAt || null : addDays(inv.to, -1));
   const issued = d.invoices.filter(i => i.status === 'ausgestellt');
-  const rows = issued.filter(i => { const k = keyDate(i); return k && k >= period.from && k < period.to; })
-    .sort((a, b) => (a.number < b.number ? -1 : 1));
+  const inP = x => x && x >= period.from && x < period.to;
+  // Je Rechnung der im Zeitraum zu versteuernde Anteil: Soll = ganze Rechnung nach Leistungsende,
+  // Ist = Zahlungen im Zeitraum, anteilig auf die Steuersätze verteilt (auch Anzahlungen)
+  const rows = [];
+  for (const inv of issued) {
+    let share = 0, paid = [];
+    if (S.taxation === 'soll') share = inP(addDays(inv.to, -1)) ? 1 : 0;
+    else {
+      paid = paymentsOf(inv).filter(p => inP(p.date));
+      const base = Math.abs(inv.totals.gross);
+      share = base ? paid.reduce((a, p) => a + p.amount, 0) / base : 0;
+    }
+    if (!share) continue;
+    const vat = inv.totals.vat.map(v => ({ rate: v.rate, gross: r2(v.gross * share), net: r2(v.net * share), tax: r2(v.tax * share) }));
+    rows.push({ number: inv.number, date: inv.date, kind: inv.kind, buyer: inv.buyer.name, from: inv.from, to: inv.to, paidAt: paid.map(p => p.date).join(', ') || inv.paidAt || '',
+      gross: r2(vat.reduce((a, v) => a + v.gross, 0)), invoiceGross: inv.totals.gross, partial: share < 0.9999, vat });
+  }
+  rows.sort((a, b) => (a.number < b.number ? -1 : 1));
   const byRate = {};
-  for (const inv of rows) for (const v of inv.totals.vat) {
+  for (const r of rows) for (const v of r.vat) {
     const g = (byRate[v.rate] ||= { rate: v.rate, gross: 0, net: 0, tax: 0 });
     g.gross = r2(g.gross + v.gross); g.net = r2(g.net + v.net); g.tax = r2(g.tax + v.tax);
   }
-  const unpaid = S.taxation === 'ist' ? issued.filter(i => !i.paidAt && i.date < period.to && i.kind === 'rechnung' && !i.cancelledBy).length : 0;
+  const unpaid = S.taxation === 'ist' ? issued.filter(i => i.kind === 'rechnung' && !i.cancelledBy && i.date < period.to && (openAmount(i) || 0) > 0.005).length : 0;
   // Aufenthalte aus der Gästedatenbank ohne App-Rechnung (z. B. Airbnb/Booking), nur zur Information
   const invoicedStays = new Set(issued.map(i => i.stayId).filter(Boolean));
   const other = (d.stays || []).filter(st => st.status !== 'storniert' && st.price != null && !invoicedStays.has(st.id)
@@ -500,7 +613,7 @@ export function vatReport(d, period, today = new Date().toISOString().slice(0, 1
   const otherGross = r2(other.reduce((a, st) => a + st.price, 0));
   const otherNet = r2(otherGross / (1 + S.vatRate / 100));
   return {
-    period, taxation: S.taxation, rows: rows.map(i => ({ number: i.number, date: i.date, kind: i.kind, buyer: i.buyer.name, from: i.from, to: i.to, paidAt: i.paidAt || '', gross: i.totals.gross, vat: i.totals.vat })),
+    period, taxation: S.taxation, rows,
     byRate: Object.values(byRate).sort((a, b) => b.rate - a.rate), unpaid,
     kz: { kz86: r2(byRate[7]?.net || 0), tax7: r2(byRate[7]?.tax || 0), kz81: r2(byRate[19]?.net || 0), tax19: r2(byRate[19]?.tax || 0) },
     other: { count: other.length, gross: otherGross, net: otherNet, tax: r2(otherGross - otherNet), byChannel: Object.entries(other.reduce((m, st) => { m[st.channel || 'ohne Kanal'] = r2((m[st.channel || 'ohne Kanal'] || 0) + st.price); return m; }, {})) },
@@ -520,16 +633,16 @@ export function vatReportPdf(rep, sellerName = '') {
   for (const [k, v] of kz) { doc.text(L, y, k, { size: 10 }); right(R, y, v, { size: 10 }); y += 15; }
   const ex = rep.byRate.find(r => r.rate === 0);
   if (ex) { doc.text(L, y, 'Kurtaxe (durchlaufender Posten, nicht in die Voranmeldung)', { size: 10, color: MUTED }); right(R, y, eur(ex.gross), { size: 10, color: MUTED }); y += 15; }
-  if (rep.unpaid) { y += 4; doc.text(L, y, `Hinweis: ${rep.unpaid} Rechnung(en) noch nicht als bezahlt markiert, daher bei Ist-Versteuerung noch nicht enthalten.`, { size: 8.5, color: '#b03a2e' }); y += 14; }
+  if (rep.unpaid) { y += 4; doc.text(L, y, `Hinweis: ${rep.unpaid} Rechnung(en) noch nicht vollständig bezahlt. Bei Ist-Versteuerung zählen nur erfasste Zahlungen.`, { size: 8.5, color: '#b03a2e' }); y += 14; }
   y += 14;
   doc.text(L, y, `Rechnungen im Zeitraum (${rep.rows.length})`, { size: 11, bold: true }); y += 16;
-  const head = () => { doc.fill('#eef1ef').rect(L - 4, y - 10, R - L + 8, 14); for (const [xx, t] of [[L, 'Nummer'], [L + 75, 'Datum'], [L + 135, 'Gast'], [L + 290, 'Zeitraum'], [L + 380, 'bezahlt']]) doc.text(xx, y, t, { size: 8, bold: true }); right(R, y, 'Brutto', { size: 8, bold: true }); y += 15; };
+  const head = () => { doc.fill('#eef1ef').rect(L - 4, y - 10, R - L + 8, 14); for (const [xx, t] of [[L, 'Nummer'], [L + 75, 'Datum'], [L + 135, 'Gast'], [L + 290, 'Zeitraum'], [L + 380, 'bezahlt']]) doc.text(xx, y, t, { size: 8, bold: true }); right(R, y, rep.taxation === 'ist' ? 'gezahlt im Zeitraum' : 'Brutto', { size: 8, bold: true }); y += 15; };
   head();
   for (const r of rep.rows) {
     if (y > 780) { doc.newPage(); y = 60; head(); }
     doc.text(L, y, r.number + (r.kind === 'storno' ? ' (Storno)' : ''), { size: 8.5 }); doc.text(L + 75, y, de(r.date), { size: 8.5 });
     doc.text(L + 135, y, r.buyer, { size: 8.5, clip: [L + 135, y - 10, 150, 14] }); doc.text(L + 290, y, `${de(r.from).slice(0, 6)}–${de(r.to)}`, { size: 8.5 });
-    doc.text(L + 380, y, de(r.paidAt), { size: 8.5 }); right(R, y, eur(r.gross), { size: 8.5 }); y += 13;
+    doc.text(L + 380, y, r.paidAt.split(', ').map(de).join(', '), { size: 8.5, clip: [L + 380, y - 10, 60, 14] }); right(R, y, eur(r.gross) + (r.partial ? ` von ${eur(r.invoiceGross)}` : ''), { size: 8.5 }); y += 13;
   }
   if (!rep.rows.length) { doc.text(L, y, 'Keine Rechnungen in diesem Zeitraum.', { size: 9, color: MUTED }); y += 13; }
   y += 18; if (y > 700) { doc.newPage(); y = 60; }
@@ -544,7 +657,7 @@ export function vatReportPdf(rep, sellerName = '') {
 export function vatReportCsv(rep) {
   const c = v => { const t = String(v ?? ''); return /[";\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t; };
   const e = v => v.toFixed(2).replace('.', ',');
-  const head = ['Nummer', 'Art', 'Datum', 'Gast', 'Anreise', 'Abreise', 'bezahlt am', 'Brutto', 'Netto 7 %', 'USt 7 %', 'Netto 19 %', 'USt 19 %', 'Kurtaxe'];
+  const head = ['Nummer', 'Art', 'Datum', 'Gast', 'Anreise', 'Abreise', 'bezahlt am', rep.taxation === 'ist' ? 'gezahlt im Zeitraum' : 'Brutto', 'Netto 7 %', 'USt 7 %', 'Netto 19 %', 'USt 19 %', 'Kurtaxe'];
   const rows = rep.rows.map(r => {
     const g = rate => r.vat.find(v => v.rate === rate) || { net: 0, tax: 0, gross: 0 };
     return [r.number, r.kind, r.date, r.buyer, r.from, r.to, r.paidAt, e(r.gross), e(g(7).net), e(g(7).tax), e(g(19).net), e(g(19).tax), e(g(0).gross)];
