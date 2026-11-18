@@ -50,6 +50,10 @@ In der PC-Ansicht oben auf **👥 Gäste** klicken. Die App führt eine eigene L
 
 ### Rechnungen für Direktgäste
 
+**Testbetrieb:** Mit `INVOICE_TEST_MODE=1` in der `.env` bekommen festgeschriebene Rechnungen TEST-Nummern (eigener Zähler), den Aufdruck „Testrechnung“ und landen in `/data/rechnungen-test/`. Sie zählen ohne Testbetrieb nicht im USt-Bericht und lassen sich unter 🧾 Rechnungen gesammelt löschen. Für den echten Betrieb die Zeile entfernen und `docker compose up -d` ausführen.
+
+**Korrigieren:** Festgeschriebene Rechnungen werden nicht geändert. „Rechnung korrigieren“ erzeugt eine Stornorechnung und einen neuen Entwurf als Kopie; bereits gezahlte Beträge werden verrechnet.
+
 Oben auf **🧾 Rechnungen** klicken.
 
 1. Einmalig **Vermieterdaten und Preise** ausfüllen: Name, Anschrift, Steuernummer, Bank, Rechnungsnummern (Präfix, nächste Nummer), Zahlungsziel, Ist- oder Soll-Versteuerung, Preisbausteine (im Grundpreis enthaltene Personen, Mehrbelegung Erwachsene/Kinder je Nacht, Altersgrenzen, Endreinigung) und Kurtaxe nach Altersgruppen (Satz Hauptsaison und übrige Zeit, Saisons aus ⚙ Einstellungen).
