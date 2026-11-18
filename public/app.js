@@ -722,7 +722,7 @@
     try {
       if (ivs.page === 'list') ivs.list = await api('/api/admin/invoices');
       if (ivs.page === 'edit') ivs.cur = await api(`/api/admin/invoices/${ivs.id}`);
-      if (ivs.page === 'settings') ivs.set = (await api('/api/admin/invoice-settings')).settings;
+      if (ivs.page === 'settings') { const j = await api('/api/admin/invoice-settings'); ivs.set = j.settings; ivs.ph = j.placeholders || {}; }
     } catch (e) { ivs.page = 'list'; v.innerHTML = `<div class="notice warn">${esc(e.message)}</div>`; return; }
     v.innerHTML = ivs.page === 'edit' ? invEditor() : ivs.page === 'settings' ? invSettings() : invList();
     bindInvoices();
@@ -771,7 +771,7 @@
       <section class="sec"><h3>Vermieterin (steht auf jeder Rechnung)</h3>
         <p class="d">Änderungen gelten für neue Rechnungen. Festgeschriebene Rechnungen behalten die Angaben von damals.</p>
         <div class="gform">${f('name', 'Name')}${f('street', 'Straße und Hausnummer')}${f('zip', 'PLZ')}${f('city', 'Ort')}
-          ${f('phone', 'Telefon')}${f('email', 'E-Mail')}${f('taxNumber', 'Steuernummer', 'data-sl', sl.taxNumber, false, 'z. B. 61/123/45678')}${f('vatId', 'USt-IdNr. (falls vorhanden)', 'data-sl', sl.vatId, false, 'DE…')}
+          ${f('phone', 'Telefon')}${f('mobile', 'Mobil (für den Mietvertrag)')}${f('email', 'E-Mail')}${f('taxNumber', 'Steuernummer', 'data-sl', sl.taxNumber, false, 'z. B. 61/123/45678')}${f('vatId', 'USt-IdNr. (falls vorhanden)', 'data-sl', sl.vatId, false, 'DE…')}
           ${f('bank', 'Bank')}${f('iban', 'IBAN')}${f('bic', 'BIC')}${f('accountHolder', 'Kontoinhaber')}</div>
       </section>
       <section class="sec"><h3>Logo auf der Rechnung</h3>
@@ -819,7 +819,52 @@
           <span class="small">leer = Hauptsaisons aus ⚙ Einstellungen</span></div>
         <div class="tbl"><table><thead><tr><th>Gruppe</th><th>Alter</th><th>€ Hauptsaison</th><th>€ übrige Zeit</th><th></th></tr></thead><tbody>${kt}</tbody></table></div>
         <div class="row"><button class="mini" type="button" id="ktAdd">+ Altersgruppe</button></div>
-      </section></div>`;
+      </section>
+      ${contractSettings(S)}</div>`;
+  }
+
+  // Mietbedingungen (Anhang der Rechnung) und Mietvertrag (Papier): Vorlagen als Abschnittslisten mit Platzhaltern
+  function contractSettings(S) {
+    const C = S.contract;
+    const apts = (data?.apartments || []).filter(a => a.source !== 'own').map(a => a.name);
+    const ta = (attr, val, rows = 3) => `<textarea class="in" ${attr} rows="${rows}" style="width:100%">${esc(val || '')}</textarea>`;
+    const tab = ivs.termsTab || 'termsInvoice';
+    const list = C[tab] || [];
+    const other = tab === 'termsInvoice' ? 'Mietvertrag' : 'Rechnung';
+    return `<section class="sec"><h3>Mietbedingungen und Mietvertrag</h3>
+        <p class="d">Normalfall: Die Rechnung geht per E-Mail an den Gast, mit dem Hinweis unten und den Mietbedingungen als zweite Seite. Mit der Anzahlung ist die Buchung bestätigt. Für Gäste, die Papier wollen, gibt es in jeder Rechnung „📄 Mietvertrag (PDF)“ mit Unterschriftenfeldern. Beide Vorlagen sind hier frei änderbar. Änderungen gelten für neue Rechnungen; festgeschriebene behalten die Bedingungen von damals.</p>
+        <label style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" id="ctTerms" ${C.attachTerms ? 'checked' : ''}> Mietbedingungen an jede Rechnung anhängen und Bestätigungshinweis drucken</label>
+        <label class="row" style="flex-direction:column;align-items:stretch">Bestätigungshinweis auf der ersten Rechnungsseite${ta('data-ct="confirmText"', C.confirmText, 2)}</label>
+        <div class="gform">
+          <label>Ort für die Unterschrift (Vertrag)<input class="in" data-ct="place" value="${esc(C.place)}"></label>
+          <label>Anreise ab (Uhrzeit)<input class="in" data-ct="checkIn" value="${esc(C.checkIn)}"></label>
+          <label>Abreise bis (Uhrzeit)<input class="in" data-ct="checkOut" value="${esc(C.checkOut)}"></label></div>
+        <h3 style="font-size:1.05em">Wohnungen (Platzhalter [Wohnung])</h3>
+        <label class="row" style="flex-direction:column;align-items:stretch">Standardbeschreibung${ta('data-ct="defaultDescription"', C.defaultDescription)}</label>
+        ${apts.map(n => { const a = C.apartments[n] || {}; return `<div class="gform" style="align-items:start"><label>${esc(n)}: Bezeichnung<input class="in" data-cta="${esc(n)}|label" value="${esc(a.label || '')}" placeholder="z. B. OG 4"></label>
+          <label class="wide">Beschreibung (leer = Standard)${ta(`data-cta="${esc(n)}|description"`, a.description, 2)}</label></div>`; }).join('')}
+        <h3 style="font-size:1.05em">Vorlage bearbeiten</h3>
+        <div class="row"><button class="${tab === 'termsInvoice' ? 'btn primary' : 'btn'}" type="button" data-ttab="termsInvoice">Mietbedingungen (Anhang der Rechnung)</button>
+          <button class="${tab === 'termsContract' ? 'btn primary' : 'btn'}" type="button" data-ttab="termsContract">Mietvertrag (Papier)</button>
+          <a class="mini" href="#" id="ctPh">Platzhalter anzeigen</a></div>
+        <div id="ctPhBox" class="notice" style="display:${ivs.phOpen ? 'block' : 'none'}"><b>Platzhalter</b> (werden beim Erzeugen ersetzt; Blöcke allein in eine Zeile schreiben):<br>${Object.entries(ivs.ph || {}).map(([k, v]) => `<code>${esc(k)}</code> ${esc(v)}`).join('<br>')}</div>
+        ${list.map((c, i) => `<div class="row" style="flex-direction:column;align-items:stretch;gap:4px">
+          <div class="row" style="margin:0"><b>${i + 1}.</b><input class="in" data-cl="${i}|title" value="${esc(c.title)}" style="max-width:340px" placeholder="Überschrift">
+            <button class="mini" type="button" data-clup="${i}" ${i ? '' : 'disabled'} aria-label="nach oben">▲</button><button class="mini" type="button" data-cldown="${i}" ${i < list.length - 1 ? '' : 'disabled'} aria-label="nach unten">▼</button><button class="mini" type="button" data-cldel="${i}" aria-label="Abschnitt löschen">✕</button></div>
+          ${ta(`data-cl="${i}|text"`, c.text, Math.min(8, Math.max(2, Math.ceil((c.text || '').length / 130) + (c.text || '').split('\n').length - 1)))}</div>`).join('')}
+        <div class="row"><button class="mini" type="button" id="clAdd">+ Abschnitt</button>
+          <button class="mini" type="button" id="ctCopy">Abschnitte aus der Vorlage „${other}“ übernehmen</button>
+          <button class="mini" type="button" id="ctReset">Diese Vorlage auf Ausgangstext zurücksetzen</button></div>
+        <p class="small">Abschnitte ohne Inhalt (z. B. „Besondere Vereinbarungen“, wenn in der Rechnung nichts eingetragen ist) werden weggelassen, die Nummerierung passt sich an.</p>
+      </section>`;
+  }
+
+  // E-Mail-Entwurf im Mailprogramm öffnen; die Rechnung (PDF) hängt man dort selbst an
+  function mailLink(I, schedule) {
+    const sl = I.seller || {};
+    const pay = (schedule || []).map(p => `- ${p.label}: ${euro(p.amount)} bis ${dmy(p.dueDate)}`).join('\n');
+    const body = `Guten Tag ${I.buyer.name},\n\nvielen Dank für Ihre Buchung${I.aptName ? ` (${I.aptName})` : ''} vom ${dmy(I.from)} bis ${dmy(I.to)}. Anbei erhalten Sie die Rechnung ${I.number} mit unseren Mietbedingungen.\n\n${pay ? `Bitte überweisen Sie:\n${pay}\n\nAuf der Rechnung finden Sie für jede Zahlung einen QR-Code für Ihre Banking-App.\n\n` : ''}Mit Ihrer Anzahlung bzw. Zahlung ist die Buchung verbindlich bestätigt und die Mietbedingungen sind anerkannt. Einen unterschriebenen Mietvertrag brauchen wir nicht; gern schicken wir Ihnen aber einen zu.\n\nWir freuen uns auf Ihren Besuch!\n\nViele Grüße\n${sl.name || ''}${sl.phone ? `\nTel. ${sl.phone}` : ''}`;
+    return `mailto:${encodeURIComponent(I.buyer.email)}?subject=${encodeURIComponent(`Ihre Buchung ${dmy(I.from)} bis ${dmy(I.to)}, Rechnung ${I.number}`)}&body=${encodeURIComponent(body)}`;
   }
 
   const mdDe = md => (md ? `${md.slice(3)}.${md.slice(0, 2)}.` : '');
@@ -833,6 +878,8 @@
     const b = I.buyer;
     const head = `<div class="row"><button class="btn" type="button" id="ivBack">◀ Rechnungen</button>${I.guestId ? '<button class="btn" type="button" id="ivGuest">Zum Gast</button>' : ''}
       <a class="btn" href="/export/rechnung/${I.id}.pdf" target="_blank" style="text-decoration:none;color:var(--fg)">${draft ? 'Vorschau PDF' : 'PDF öffnen'}</a>
+      ${I.kind === 'rechnung' ? `<a class="btn" href="/export/mietvertrag/${I.id}.pdf" target="_blank" style="text-decoration:none;color:var(--fg)">📄 Mietvertrag (PDF)</a>` : ''}
+      ${!draft && I.kind === 'rechnung' && b.email ? `<a class="btn" href="${mailLink(I, schedule)}" style="text-decoration:none;color:var(--fg)">✉ E-Mail an Gast</a>` : ''}
       ${!draft && I.files?.xml ? `<a class="btn" href="/export/rechnung/${I.id}.xml" style="text-decoration:none;color:var(--fg)">E-Rechnung (XML)</a>` : ''}</div>`;
     const sums = `<dl class="facts" style="max-width:520px">
       <dt>Gesamt brutto</dt><dd>${euro(T.gross)}</dd>
@@ -875,6 +922,7 @@
           <label>Land (2 Buchstaben)<input class="in" data-b="country" value="${esc(b.country)}"></label>
           <label>E-Mail<input class="in" data-b="email" value="${esc(b.email)}"></label>
           <label>USt-IdNr. des Gastes (nur Firmen)<input class="in" data-b="vatId" value="${esc(b.vatId)}"></label>
+          <label>Telefon (für den Mietvertrag)<input class="in" data-b="phone" value="${esc(b.phone || '')}"></label>
           <label>Referenz / Bestellnummer des Gastes<input class="in" data-b="reference" value="${esc(b.reference)}"></label>
         </div>
       </section>
@@ -887,6 +935,7 @@
           <label>Erwachsene (Anzahl)<input class="in" data-in="adults" value="${trv.adults}" inputmode="numeric"></label>
           <label>Alter der Kinder, mit Komma getrennt (aus Smoobu vorläufig 10, bitte prüfen)<input class="in" data-in="childAges" value="${esc(trv.childAges.join(', '))}" placeholder="z. B. 12, 4"></label>
           <label style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" data-in="cleaning" ${I.input.cleaning ? 'checked' : ''}> Endreinigung berechnen</label>
+          <label class="wide">Besondere Vereinbarungen für diese Buchung (erscheinen in Mietbedingungen und Mietvertrag)<textarea class="in" data-in="special" rows="2" placeholder="z. B. Hund erlaubt, späte Anreise 20 Uhr vereinbart">${esc(I.input.special || '')}</textarea></label>
           <label style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" data-in="ktExempt" ${I.input.ktExempt ? 'checked' : ''}> Geschäftsreise (keine Kurtaxe)</label>
         </div>
         <div class="row"><button class="btn primary" type="button" id="ivRecalc">Positionen neu berechnen</button><span class="small">Überschreibt die Positionen unten mit den Preisbausteinen.</span></div>
@@ -900,6 +949,8 @@
       </section>
       <section class="sec"><h3>Festschreiben</h3>
         <label class="row">Zahlungsplan <select class="in" data-in="plan" style="width:auto"><option value="auto">nach Zahlungsbedingungen</option><option value="full" ${I.input.plan === 'full' ? 'selected' : ''}>ganzer Betrag auf einmal</option></select></label>
+        ${I.input.plan === 'full' ? '' : `<div class="row">Abweichende Anzahlung (optional): Betrag (€) <input class="in short" data-in="depositAmount" value="${I.input.depositAmount ? num2(I.input.depositAmount) : ''}" placeholder="z. B. 408" style="width:100px">
+          fällig am <input class="in" type="date" data-in="depositDue" value="${I.input.depositDue || ''}" style="width:auto"><span class="small">z. B. „erst am 20.01. anweisen“. Leer = nach Zahlungsbedingungen.</span></div>`}
         ${schedTbl}${schedule.length ? (ivs.cur.settings.seller.iban && ivs.cur.settings.seller.name ? '<p class="small">Fälligkeiten gerechnet ab heute. Auf der Rechnung steht je Zahlung ein QR-Code (GiroCode) für die Überweisung.</p>' : '<div class="notice warn">Der GiroCode fehlt noch: Bitte unter „Vermieterdaten und Preise“ Name und IBAN eintragen.</div>') : ''}
         <label class="row"><input type="checkbox" id="ivE" ${I.eInvoice ? 'checked' : ''}> Auch als E-Rechnung (XRechnung) ausstellen, z. B. wenn eine Firma das verlangt</label>
         ${missing.length ? `<div class="notice warn">Bitte noch ergänzen: ${missing.map(esc).join(', ')}.</div>` : ''}
@@ -966,6 +1017,23 @@
       const groups = () => S.kurtaxe.groups.map(g => ({ ...g }));
       $$('[data-kt]').forEach(i => i.onchange = () => { const [n, k] = i.dataset.kt.split('|'); const g = groups(); g[+n][k] = i.value; save({ kurtaxe: { groups: g } }); });
       $$('[data-ktdel]').forEach(b => b.onclick = () => { const g = groups(); g.splice(+b.dataset.ktdel, 1); save({ kurtaxe: { groups: g } }); });
+      const csave = body => iAct(() => put('/api/admin/contract-settings', body), 'Gespeichert.');
+      const tab = ivs.termsTab || 'termsInvoice';
+      const cls = () => (S.contract[tab] || []).map(c => ({ ...c }));
+      const lsave = c => csave({ [tab]: c });
+      const arm = (b, label, fn) => { if (b.dataset.armed !== '1') { b.dataset.armed = '1'; b.textContent = label; b.classList.add('danger'); return; } fn(); };
+      $$('[data-ct]').forEach(i => i.onchange = () => csave({ [i.dataset.ct]: i.value }));
+      $('#ctTerms').onchange = e => csave({ attachTerms: e.target.checked });
+      $$('[data-cta]').forEach(i => i.onchange = () => { const [n, k] = i.dataset.cta.split('|'); csave({ apartments: { [n]: { [k]: i.value } } }); });
+      $$('[data-ttab]').forEach(b => b.onclick = () => { ivs.termsTab = b.dataset.ttab; renderInvoices(); });
+      $('#ctPh').onclick = e => { e.preventDefault(); ivs.phOpen = !ivs.phOpen; $('#ctPhBox').style.display = ivs.phOpen ? 'block' : 'none'; };
+      $$('[data-cl]').forEach(i => i.onchange = () => { const [n, k] = i.dataset.cl.split('|'); const c = cls(); c[+n][k] = i.value; lsave(c); });
+      $$('[data-cldel]').forEach(b => b.onclick = () => arm(b, 'Löschen?', () => { const c = cls(); c.splice(+b.dataset.cldel, 1); lsave(c); }));
+      $$('[data-clup]').forEach(b => b.onclick = () => { const c = cls(), k = +b.dataset.clup; [c[k - 1], c[k]] = [c[k], c[k - 1]]; lsave(c); });
+      $$('[data-cldown]').forEach(b => b.onclick = () => { const c = cls(), k = +b.dataset.cldown; [c[k + 1], c[k]] = [c[k], c[k + 1]]; lsave(c); });
+      $('#clAdd').onclick = () => { const c = cls(); c.push({ title: 'Neuer Abschnitt', text: 'Text' }); lsave(c); };
+      $('#ctCopy').onclick = () => arm($('#ctCopy'), 'Wirklich diese Vorlage durch die andere ersetzen?', () => iAct(() => post('/api/admin/contract-settings/reset', { which: tab, from: 'other' }), 'Übernommen.'));
+      $('#ctReset').onclick = () => arm($('#ctReset'), 'Wirklich auf den Ausgangstext zurücksetzen?', () => iAct(() => post('/api/admin/contract-settings/reset', { which: tab }), 'Zurückgesetzt.'));
       $('#ktAdd').onclick = () => { const g = groups(); const last = g[g.length - 1]; g.push({ label: 'Neue Gruppe', ageFrom: last ? Math.min(120, last.ageTo + 1) : 0, ageTo: 120, rate: 0, rateNeben: null }); save({ kurtaxe: { groups: g } }); };
       return;
     }

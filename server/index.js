@@ -19,6 +19,7 @@ import { smoobuConfigured, smoobuAuthMode, listApartments as smoobuApartments, f
 import * as G from './guests.js';
 import * as INV from './invoices.js';
 import { loadImage } from './image.js';
+import { contractPdf, cleanContract, ensureContract, DEFAULT_CONTRACT, DEFAULT_TERMS_INVOICE, DEFAULT_TERMS_CONTRACT, PLACEHOLDERS, appendTerms, termsSnapshot } from './contract.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC = path.join(__dirname, '..', 'public');
@@ -264,7 +265,7 @@ async function handle(req, res, mode) {
     return send(res, 200, buffer, 'application/pdf', { 'Content-Disposition': `inline; filename="${filename}"` });
   }
 
-  if (p.startsWith('/api/admin/') || p === '/export/gaeste.csv' || p.startsWith('/export/rechnung/') || p.startsWith('/export/ust-bericht.')) {
+  if (p.startsWith('/api/admin/') || p === '/export/gaeste.csv' || p.startsWith('/export/rechnung/') || p.startsWith('/export/mietvertrag/') || p.startsWith('/export/ust-bericht.')) {
     if (mode !== 'admin') return send(res, 403, { error: 'Nur über die PC-Ansicht möglich.' });
     try { return await handleAdmin(req, res, p, url); }
     catch (e) { return send(res, 400, { error: e.message }); }
@@ -525,6 +526,12 @@ const LOGO_DIR = path.join(DATA_DIR, 'logo');
 const DEFAULT_LOGO = path.join(__dirname, 'assets', 'logo-default.png');
 let logoCache = { file: null, img: null };
 // Logo für die Rechnung, falls eingeschaltet (aufbereitet und zwischengespeichert)
+// Rechnung mit Hinweis „Bestätigung durch Anzahlung“ und angehängten Mietbedingungen (nicht bei Storno)
+function termsOpts(inv, S) {
+  const C = S.contract;
+  if (!C?.attachTerms || inv.kind !== 'rechnung') return {};
+  return { note: C.confirmText || '', appendPages: doc => appendTerms(doc, inv, S, C) };
+}
 function currentLogo(S) {
   if (!S.logo?.enabled || !S.logo.file) return null;
   if (logoCache.file !== S.logo.file) {
@@ -549,7 +556,7 @@ function archive(inv) {
   fs.mkdirSync(invDir(inv), { recursive: true });
   const base = path.join(invDir(inv), inv.number.replace(/[^A-Za-z0-9-]/g, '_'));
   const xml = inv.eInvoice ? INV.xrechnungXml(inv) : null;
-  const pdf = INV.invoicePdf(inv, { xml, logo: currentLogo(store.data.invoiceSettings) }).buffer;
+  const pdf = INV.invoicePdf(inv, { xml, ...termsOpts(inv, store.data.invoiceSettings), logo: currentLogo(store.data.invoiceSettings) }).buffer;
   const written = [];
   try {
     if (xml) { fs.writeFileSync(base + '.xml', xml, { flag: 'wx' }); written.push(base + '.xml'); }
@@ -567,6 +574,7 @@ function invSummary(d, i) {
 async function handleInvoices(req, res, p, m, d, url) {
   INV.ensure(d);
   initLogo(d);
+  d.invoiceSettings.contract = ensureContract(d.invoiceSettings.contract);
   const S = d.invoiceSettings;
   if (p === '/api/admin/invoice-logo' && m === 'GET') {
     if (!S.logo.file) return send(res, 404, 'Kein Logo', 'text/plain; charset=utf-8');
@@ -586,7 +594,26 @@ async function handleInvoices(req, res, p, m, d, url) {
     if (old && old !== file) fs.rmSync(path.join(LOGO_DIR, old), { force: true });
     store.save(); return send(res, 200, { ok: true, settings: S });
   }
-  if (p === '/api/admin/invoice-settings' && m === 'GET') return send(res, 200, { settings: S, year: new Date().getFullYear() });
+  if (p === '/api/admin/contract-settings' && m === 'PUT') {
+    S.contract = cleanContract(await readJson(req, 2e5), S.contract); store.save(); return send(res, 200, { settings: S });
+  }
+  if (p === '/api/admin/contract-settings/reset' && m === 'POST') {
+    // eine Vorlage (Rechnung oder Vertrag) auf den Ausgangstext zurücksetzen, oder aus der anderen übernehmen
+    const { which, from } = await readJson(req);
+    if (!['termsInvoice', 'termsContract'].includes(which)) throw new Error('Unbekannte Vorlage');
+    S.contract[which] = from === 'other' ? structuredClone(S.contract[which === 'termsInvoice' ? 'termsContract' : 'termsInvoice'])
+      : which === 'termsInvoice' ? DEFAULT_TERMS_INVOICE() : DEFAULT_TERMS_CONTRACT();
+    store.save(); return send(res, 200, { settings: S });
+  }
+  const cx = p.match(/^\/export\/mietvertrag\/(\d+)\.pdf$/);
+  if (cx && m === 'GET') {
+    const inv = d.invoices.find(i => i.id === +cx[1] && i.kind === 'rechnung');
+    if (!inv) return send(res, 404, 'Nicht gefunden', 'text/plain; charset=utf-8');
+    const buf = contractPdf(inv, S, S.contract, { logo: currentLogo(S) });
+    const fn = `Mietvertrag-${inv.buyer.name.replace(/[^A-Za-z0-9ÄÖÜäöüß-]+/g, '_')}-${inv.from}.pdf`;
+    return send(res, 200, buf, 'application/pdf', { 'Content-Disposition': `inline; filename="${fn.replace(/[^\x20-\x7e]/g, '_')}"` });
+  }
+  if (p === '/api/admin/invoice-settings' && m === 'GET') return send(res, 200, { settings: S, year: new Date().getFullYear(), placeholders: PLACEHOLDERS });
   if (p === '/api/admin/invoice-settings' && m === 'PUT') { d.invoiceSettings = INV.cleanSettings(await readJson(req), S); store.save(); return send(res, 200, { settings: d.invoiceSettings }); }
   if (p === '/api/admin/invoices' && m === 'GET') {
     return send(res, 200, { invoices: [...d.invoices].sort((a, b) => (b.id - a.id)).map(i => invSummary(d, i)), taxation: S.taxation,
@@ -623,7 +650,7 @@ async function handleInvoices(req, res, p, m, d, url) {
       if (inv.status !== 'ausgestellt' || !inv.files?.xml) throw new Error('Für diese Rechnung gibt es keine E-Rechnung.');
       return send(res, 200, fs.readFileSync(path.join(invDir(inv), inv.files.xml)), 'application/xml; charset=utf-8', { 'Content-Disposition': `attachment; filename="${name}.xml"` });
     }
-    const buf = inv.status === 'ausgestellt' && inv.files?.pdf ? fs.readFileSync(path.join(invDir(inv), inv.files.pdf)) : INV.invoicePdf(inv, { draftSettings: S, logo: currentLogo(S) }).buffer;
+    const buf = inv.status === 'ausgestellt' && inv.files?.pdf ? fs.readFileSync(path.join(invDir(inv), inv.files.pdf)) : INV.invoicePdf(inv, { draftSettings: S, logo: currentLogo(S), ...termsOpts(inv, S) }).buffer;
     return send(res, 200, buf, 'application/pdf', { 'Content-Disposition': `inline; filename="${name}.pdf"` });
   }
   if (p === '/api/admin/invoices/test-cleanup' && m === 'POST') {
@@ -662,7 +689,8 @@ async function handleInvoices(req, res, p, m, d, url) {
   if (act === 'issue' && m === 'POST') {
     const before = structuredClone(d.invoiceSettings.counters);
     INV.issue(d, inv, undefined, { test: INVOICE_TEST_MODE });
-    try { archive(inv); } catch (e) { inv.status = 'entwurf'; inv.number = null; d.invoiceSettings.counters = before; throw new Error(`Rechnung konnte nicht abgelegt werden: ${e.message}`); }
+    if (inv.kind === 'rechnung') inv.terms = termsSnapshot(d.invoiceSettings.contract, inv.aptName);
+    try { archive(inv); } catch (e) { inv.status = 'entwurf'; inv.number = null; delete inv.terms; d.invoiceSettings.counters = before; throw new Error(`Rechnung konnte nicht abgelegt werden: ${e.message}`); }
     store.save(); return send(res, 200, { ok: true, number: inv.number });
   }
   if (act === 'cancel' && m === 'POST') { const st = INV.cancel(d, inv); archive(st); store.save(); return send(res, 200, { ok: true, id: st.id, number: st.number }); }

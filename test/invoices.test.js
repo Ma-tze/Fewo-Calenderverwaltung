@@ -221,3 +221,51 @@ test('Logo: PNG mit Transparenz und JPG werden ins PDF eingebettet', async () =>
   assert.match(pdf, /\/Im1 Do/);
   assert.throws(() => loadImage(Buffer.from('GIF89a')), /PNG- oder JPG/);
 });
+
+test('Mietvertrag aus der Rechnung, abweichende Anzahlung mit eigenem Termin', async () => {
+  const { contractPdf, DEFAULT_CONTRACT } = await import('../server/contract.js');
+  const { d, inv } = setup();
+  I.updateDraft(d, inv, { input: { depositAmount: '408', depositDue: '2026-03-01' }, buyer: { phone: '0170 1' } });
+  const sch = I.paymentSchedule(d.invoiceSettings, inv, '2026-02-01');
+  assert.deepEqual(sch.map(p => [p.label, p.amount, p.dueDate]), [['Anzahlung', 408, '2026-03-01'], ['Restzahlung', I.totals(inv.items, inv.deposit).due - 408, '2026-06-13']].map(r => [r[0], Math.round(r[1] * 100) / 100, r[2]]));
+  const C = { ...DEFAULT_CONTRACT(), apartments: { 'Fewo 2': { label: 'OG 4', description: '' } } };
+  I.updateDraft(d, inv, { input: { special: 'Hund erlaubt' } });
+  const pdf = contractPdf(inv, d.invoiceSettings, C, { today: '2026-02-01' }).toString('latin1');
+  assert.match(pdf, /Mietvertrag/);
+  assert.match(pdf, /Ferienwohnung OG 4 im Kapellenweg/);
+  assert.match(pdf, /Anzahlung: 408,00 \x80 bis sp\xe4testens 01\.03\.2026/);
+  assert.match(pdf, /Sa, 27\.06\.2026, 15:00 Uhr/);
+  assert.match(pdf, /Salvatorische Klausel/);
+  assert.match(pdf, /Besondere Vereinbarungen/); assert.match(pdf, /Hund erlaubt/);
+  // ohne besondere Vereinbarung entfällt der Abschnitt
+  I.updateDraft(d, inv, { input: { special: '' } });
+  assert.doesNotMatch(contractPdf(inv, d.invoiceSettings, C, { today: '2026-02-01' }).toString('latin1'), /Besondere Vereinbarungen/);
+});
+
+test('Vorlagen: alte gemeinsame Klauselliste wird übernommen, Schnappschuss beim Festschreiben', async () => {
+  const { ensureContract, cleanContract, termsSnapshot, contractPdf } = await import('../server/contract.js');
+  const C = ensureContract({ clauses: [{ title: 'Eigene Regel', text: 'Rauchen verboten.' }] });
+  assert.equal(C.termsInvoice.at(-1).title, 'Eigene Regel');
+  assert.equal(C.termsContract.at(-1).title, 'Eigene Regel');
+  assert.equal(C.clauses, undefined);
+  const C2 = cleanContract({ termsContract: [{ title: 'Nur eins', text: 'vom [Anreise]' }] }, C);
+  assert.equal(C2.termsContract.length, 1);
+  const { d, inv } = setup();
+  inv.status = 'ausgestellt'; inv.number = 'R-2026-009'; inv.date = '2026-02-01'; inv.seller = d.invoiceSettings.seller; inv.totals = I.totals(inv.items, inv.deposit); inv.schedule = [];
+  inv.terms = termsSnapshot(C, inv.aptName);
+  // spätere Änderung der Vorlage wirkt nicht auf die festgeschriebene Rechnung
+  const pdf = contractPdf(inv, d.invoiceSettings, C2).toString('latin1');
+  assert.match(pdf, /Eigene Regel/);
+  assert.doesNotMatch(pdf, /Nur eins/);
+});
+
+test('Rechnung mit Bestätigungshinweis und angehängten Mietbedingungen', async () => {
+  const { appendTerms, DEFAULT_CONTRACT } = await import('../server/contract.js');
+  const { d, inv } = setup();
+  const C = DEFAULT_CONTRACT();
+  const pdf = I.invoicePdf(inv, { draftSettings: d.invoiceSettings, note: C.confirmText, appendPages: doc => appendTerms(doc, inv, d.invoiceSettings, C) }).buffer.toString('latin1');
+  assert.match(pdf, /Mietbedingungen/);
+  assert.match(pdf, /Mit Ihrer Anzahlung bzw\. Zahlung best\xe4tigen Sie die Buchung/);
+  assert.match(pdf, /Salvatorische Klausel/);
+  assert.match(pdf, /\/Count [2-9]/);
+});
