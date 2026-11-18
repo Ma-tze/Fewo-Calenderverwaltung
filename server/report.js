@@ -6,6 +6,7 @@ import { addDays } from './ical.js';
 const COLORS = { p1: '#5b6878', p2: '#2a72b0', p3: '#2b7d4c', p4: '#a0560f', p5: '#7046a8', p6: '#0f7479', p7: '#a33a33', p8: '#66721a' };
 const MONTHS = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
 const WD = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
+const SAT = '#f3dfb3', SATLINE = '#c08a1e';
 const FG = '#1d2420', MUTED = '#6b7570', GRID = '#c9d0cc', WEEKEND = '#eef1ef', SCHOOL = '#e9dcf5', HAUPT = '#f2b84b', NEBEN = '#cfe3c1';
 
 const de = d => `${d.slice(8, 10)}.${d.slice(5, 7)}.`;
@@ -58,7 +59,8 @@ export function monthPdf(cal, ym, { contacts = true } = {}) {
   // Wochenenden / Feiertage hinterlegen
   for (let i = 0; i < days; i++) {
     const d = addDays(first, i), w = wday(d);
-    if (w === 0 || w === 6 || publicDays.has(d)) doc.fill(WEEKEND).rect(L + labelW + i * dayW, gridTop, dayW, rowsH);
+    if (w === 6) doc.fill(SAT).rect(L + labelW + i * dayW, gridTop, dayW, rowsH);
+    else if (w === 0 || publicDays.has(d)) doc.fill(WEEKEND).rect(L + labelW + i * dayW, gridTop, dayW, rowsH);
   }
   for (let i = 0; i < days; i++) {
     const d = addDays(first, i), x = L + labelW + i * dayW, w = wday(d);
@@ -71,9 +73,9 @@ export function monthPdf(cal, ym, { contacts = true } = {}) {
   doc.stroke(GRID, 0.4);
   for (let i = 0; i <= days; i++) { const x = L + labelW + i * dayW; doc.line(x, gridTop, x, gridTop + rowsH); }
   for (let r = 0; r <= cal.apartments.length; r++) doc.line(L, gridTop + headH + r * rowH, R, gridTop + headH + r * rowH);
-  // Montag = Wochenbeginn etwas kräftiger
-  doc.stroke('#8a958f', 0.8);
-  for (let i = 0; i < days; i++) if (wday(addDays(first, i)) === 1) { const x = L + labelW + i * dayW; doc.line(x, gridTop, x, gridTop + rowsH); }
+  // Samstag = Wechseltag: kräftige Linie
+  doc.stroke(SATLINE, 1.2);
+  for (let i = 0; i < days; i++) if (wday(addDays(first, i)) === 6) { const x = L + labelW + i * dayW; doc.line(x, gridTop, x, gridTop + rowsH); }
 
   const monthEvents = cal.events.filter(e => e.start < next && e.end > first).sort((a, b) => (a.start < b.start ? -1 : a.start > b.start ? 1 : a.apt - b.apt));
   cal.apartments.forEach((a, r) => {

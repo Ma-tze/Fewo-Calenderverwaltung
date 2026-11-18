@@ -21,11 +21,13 @@
   const fy = dt => `${f(dt)}${dt.getFullYear()}`;
   const fl = dt => `${WDL[dt.getDay()]}, ${dt.getDate()}. ${MONTHS[dt.getMonth()]} ${dt.getFullYear()}`;
   const startOfWeek = dt => add(dt, -((dt.getDay() + 6) % 7));
+  // Wechseltag ist Samstag: die 4-Wochen-Ansicht beginnt immer an einem Samstag
+  const startOfSat = dt => add(dt, -((dt.getDay() + 1) % 7));
   const midnight = () => { const n = new Date(); return new Date(n.getFullYear(), n.getMonth(), n.getDate()); };
   const color = c => `var(--${/^p[1-8]$/.test(c) ? c : 'p1'})`;
 
   let TODAY = midnight();
-  const state = { view: 'w4', start: startOfWeek(TODAY), m3: new Date(TODAY.getFullYear(), TODAY.getMonth(), 1), year: TODAY.getFullYear() };
+  const state = { view: 'w4', start: startOfSat(TODAY), m3: new Date(TODAY.getFullYear(), TODAY.getMonth(), 1), year: TODAY.getFullYear() };
   let data = { apartments: [], events: [], holidays: [], seasons: [] };
   let lastOk = null;
   let loadError = null;
@@ -82,7 +84,7 @@
 
     $$('nav.dock [data-nav]').forEach(b => b.setAttribute('aria-current', b.dataset.nav === state.view ? 'true' : 'false'));
     $('#legend').innerHTML = data.apartments.map(a => `<span><i style="background:${color(a.color)}"></i>${esc(a.name)}${a.nick && a.nick !== a.name ? ` „${esc(a.nick)}“` : ''}</span>`).join('')
-      + `<span><i style="background:var(--holiday)"></i>Schulferien BW</span><span><i style="background:var(--s-haupt)"></i>Hauptsaison</span><span><i style="background:var(--s-neben)"></i>Nebensaison</span>`;
+      + `<span><i style="background:var(--saturday);box-shadow:inset 3px 0 0 var(--sat-line)"></i>Samstag = Wechseltag</span><span><i style="background:var(--holiday)"></i>Schulferien BW</span><span><i style="background:var(--s-haupt)"></i>Hauptsaison</span><span><i style="background:var(--s-neben)"></i>Nebensaison</span>`;
   }
 
   /* ---------- Raster (4 Wochen / 3 Monate) ---------- */
@@ -108,12 +110,12 @@
       i += len;
     }
     for (let i = 0; i < n; i++) {
-      const dt = add(start, i), we = dt.getDay() === 0 || dt.getDay() === 6, pub = pubDays.get(iso(dt));
+      const dt = add(start, i), we = dt.getDay() === 0 || dt.getDay() === 6, sa = dt.getDay() === 6, pub = pubDays.get(iso(dt));
       // 3-Monats-Ansicht: nur Montage beschriften (Monat steht in der Leiste darüber), sonst wird es zu eng
-      const label = !compact || dt.getDay() === 1;
+      const label = !compact || dt.getDay() === 6;
       const top = compact ? (label ? WD[dt.getDay()] : '&nbsp;') : WD[dt.getDay()];
       const ms = dt.getDate() === 1 && i > 0 ? 'mstart' : '';
-      h += `<div class="hd ${we ? 'we' : ''} ${pub ? 'pub' : ''} ${ms} ${same(dt, TODAY) ? 'today' : ''}" style="grid-column:${2 + 2 * i} / span 2;grid-row:2" ${pub ? `title="${esc(pub)}"` : ''}>${top}<b>${label ? dt.getDate() : '&nbsp;'}</b></div>`;
+      h += `<div class="hd ${we ? 'we' : ''} ${sa ? 'sa' : ''} ${pub ? 'pub' : ''} ${ms} ${same(dt, TODAY) ? 'today' : ''}" style="grid-column:${2 + 2 * i} / span 2;grid-row:2" ${pub ? `title="${esc(pub)}"` : ''}>${top}<b>${label ? dt.getDate() : '&nbsp;'}</b></div>`;
     }
     // Ferien- und Saisonband
     h += `<div class="rowlbl" style="grid-column:1;grid-row:3">Ferien BW</div><div class="rowlbl" style="grid-column:1;grid-row:4">Saison</div>`;
@@ -131,7 +133,7 @@
       h += `<div class="lbl" style="grid-column:1;grid-row:${row}"><span class="dot" style="background:${color(a.color)}"></span><span>${esc(a.name)}${a.nick && a.nick !== a.name ? `<small>${esc(a.nick)}</small>` : ''}</span></div>`;
       for (let i = 0; i < n; i++) {
         const dt = add(start, i), we = dt.getDay() === 0 || dt.getDay() === 6;
-        h += `<div class="cell ${we ? 'we' : ''} ${same(dt, TODAY) ? 'today' : ''}" style="grid-column:${2 + 2 * i} / span 2;grid-row:${row}"></div>`;
+        h += `<div class="cell ${we ? 'we' : ''} ${dt.getDay() === 6 ? 'sa' : ''} ${same(dt, TODAY) ? 'today' : ''}" style="grid-column:${2 + 2 * i} / span 2;grid-row:${row}"></div>`;
       }
       data.events.filter(e => e.apt === a.id && e.arr < end && e.dep > start).forEach(e => {
         const si = diff(start, e.arr), ei = diff(start, e.dep);
@@ -522,14 +524,14 @@
     const nav = e.target.closest('[data-nav]');
     if (nav) {
       const k = nav.dataset.nav;
-      if (k === 'today') { state.view = 'w4'; state.start = startOfWeek(TODAY); }
+      if (k === 'today') { state.view = 'w4'; state.start = startOfSat(TODAY); }
       else state.view = k;
       return render();
     }
     const bar = e.target.closest('[data-event]');
     if (bar) return openEvent(bar.dataset.event);
     const mon = e.target.closest('[data-month]');
-    if (mon) { state.view = 'w4'; state.start = startOfWeek(new Date(state.year, +mon.dataset.month, 1)); return render(); }
+    if (mon) { state.view = 'w4'; state.start = startOfSat(new Date(state.year, +mon.dataset.month, 1)); return render(); }
   });
   document.addEventListener('keydown', e => { if (e.key === 'Escape') closeOverlay(); });
   $('#prevBtn').onclick = () => step(-1);
