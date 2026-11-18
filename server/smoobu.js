@@ -66,6 +66,9 @@ export function mapBooking(b) {
     channel: b.channel?.name || '',
     blocked: !!b['is-blocked-booking'],
     cancelled: b.type === 'cancellation',
+    guestId: b.guestId != null ? String(b.guestId) : '',
+    price: b.price === '' || b.price == null || !Number.isFinite(+b.price) ? null : +b.price,
+    pricePaid: b['price-paid'] === true || /^(yes|ja|true|1)$/i.test(String(b['price-paid'] ?? '')),
   };
 }
 

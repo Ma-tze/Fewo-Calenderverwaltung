@@ -16,6 +16,7 @@ import os from 'node:os';
 import { monthPdf } from './report.js';
 import { fetchHolidays, expandSeasons, copySeasons } from './holidays.js';
 import { smoobuConfigured, smoobuAuthMode, listApartments as smoobuApartments, fetchReservations } from './smoobu.js';
+import * as G from './guests.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC = path.join(__dirname, '..', 'public');
@@ -58,7 +59,8 @@ async function fetchSmoobu() {
   if (!apts.length) return;
   const y = new Date().getFullYear();
   try {
-    const all = await fetchReservations(`${y - 1}-01-01`, `${y + 2}-12-31`);
+    const from = `${y - 1}-01-01`, to = `${y + 2}-12-31`;
+    const all = await fetchReservations(from, to);
     if (all.length !== lastSmoobuCount) console.log(`Smoobu-API: ${all.length} Buchungen abgerufen.`);
     lastSmoobuCount = all.length;
     const now = new Date().toISOString();
@@ -69,6 +71,7 @@ async function fetchSmoobu() {
       }));
       store.data.cache[a.id] = { fetchedAt: now, error: null, events };
     }
+    syncGuests(all, { from, to });
   } catch (e) {
     for (const a of apts) {
       const prev = store.data.cache[a.id] || {};
@@ -76,6 +79,18 @@ async function fetchSmoobu() {
     }
     console.error('Smoobu-Abruf fehlgeschlagen:', e.message);
   }
+}
+
+// Gäste und Aufenthalte aus Smoobu in die eigene Gästedatenbank übernehmen (bleibt auch ohne Smoobu erhalten)
+function aptBySmoobu() {
+  return Object.fromEntries(store.data.apartments.filter(a => a.smoobuId).map(a => [String(a.smoobuId), a.id]));
+}
+function syncGuests(bookings, window) {
+  try {
+    const r = G.syncBookings(store.data, bookings, aptBySmoobu(), window);
+    if (r.newGuests || r.newStays) console.log(`Gästedatenbank: ${r.newGuests} neue Gäste, ${r.newStays} neue Aufenthalte.`);
+    return r;
+  } catch (e) { console.error('Gästedatenbank: Abgleich fehlgeschlagen:', e.message); return null; }
 }
 
 // Klappt der Smoobu-API-Abruf nicht (Fehler oder kein Zugang), zeigt der Kalender den iCal-Stand.
@@ -129,8 +144,10 @@ function calendarPayload() {
       const c = store.data.cache[a.id];
       (c?.events || []).forEach((e, i) => {
         const persons = e.adults || e.children ? `${(e.adults || 0) + (e.children || 0)} Reisende${e.children ? `, davon ${e.children} Kind${e.children > 1 ? 'er' : ''}` : ''}` : '';
+        const vi = a.source === 'smoobu' && !c.fallback && e.uid ? G.visitInfo(store.data, e.uid) : null;
         events.push({ id: `${a.id}-${e.uid || i}`, apt: a.id, start: e.start, end: e.end, title: e.summary, note: [persons, e.description].filter(Boolean).join(' · '),
-          phone: e.phone || '', mobile: '', email: e.email || '', channel: e.channel || '', source: sourceLabel(a) });
+          phone: e.phone || '', mobile: '', email: e.email || '', channel: e.channel || '', source: sourceLabel(a),
+          ...(vi ? { guestId: vi.guestId, visit: vi.visit } : {}) });
       });
     }
   }
@@ -243,7 +260,7 @@ async function handle(req, res, mode) {
     return send(res, 200, buffer, 'application/pdf', { 'Content-Disposition': `inline; filename="${filename}"` });
   }
 
-  if (p.startsWith('/api/admin/')) {
+  if (p.startsWith('/api/admin/') || p === '/export/gaeste.csv') {
     if (mode !== 'admin') return send(res, 403, { error: 'Nur über die PC-Ansicht möglich.' });
     try { return await handleAdmin(req, res, p, url); }
     catch (e) { return send(res, 400, { error: e.message }); }
@@ -441,7 +458,57 @@ async function handleAdmin(req, res, p, url) {
     return send(res, 200, { added: rows.length });
   }
 
+  const r = await handleGuests(req, res, p, m, d);
+  if (r !== false) return r;
+
   return send(res, 404, { error: 'Unbekannt' });
+}
+
+/* ---------- Gästedatenbank ---------- */
+
+async function handleGuests(req, res, p, m, d) {
+  G.ensure(d);
+  const aptName = id => d.apartments.find(a => a.id === id)?.name || '';
+  if (p === '/export/gaeste.csv' && m === 'GET') {
+    const day = new Date().toISOString().slice(0, 10);
+    return send(res, 200, G.staysCsv(d, aptName), 'text/csv; charset=utf-8', { 'Content-Disposition': `attachment; filename="gaeste-${day}.csv"` });
+  }
+  if (p === '/api/admin/guests' && m === 'GET') {
+    return send(res, 200, { guests: G.guestList(d), expired: G.expiredGuests(d).length, retentionYears: G.RETENTION_YEARS,
+      smoobu: smoobuConfigured(), apartments: d.apartments.map(a => ({ id: a.id, name: a.name, nick: a.nick, color: a.color, source: a.source })) });
+  }
+  if (p === '/api/admin/guests' && m === 'POST') { const g = G.addGuest(d, await readJson(req)); store.save(); return send(res, 200, g); }
+  if (p === '/api/admin/guests/merge' && m === 'POST') {
+    const { keepId, dropId } = await readJson(req);
+    const g = G.mergeGuests(d, +keepId, +dropId); store.save(); return send(res, 200, g);
+  }
+  if (p === '/api/admin/guests/cleanup' && m === 'POST') {
+    const ids = G.expiredGuests(d); ids.forEach(id => G.deleteGuest(d, id)); store.save();
+    return send(res, 200, { deleted: ids.length });
+  }
+  if (p === '/api/admin/guests/import' && m === 'POST') {
+    const { fromYear } = await readJson(req);
+    const y = new Date().getFullYear();
+    if (!Number.isInteger(fromYear) || fromYear < 2000 || fromYear > y) throw new Error('Jahr ungültig');
+    const from = `${fromYear}-01-01`, to = `${y + 2}-12-31`;
+    const all = await fetchReservations(from, to);
+    const r = G.syncBookings(d, all, aptBySmoobu(), { from, to }); store.save();
+    return send(res, 200, { bookings: all.length, ...r });
+  }
+  const gm = p.match(/^\/api\/admin\/guests\/(\d+)$/);
+  if (gm) {
+    const g = d.guests.find(x => x.id === +gm[1]);
+    if (!g) throw new Error('Gast unbekannt');
+    if (m === 'GET') return send(res, 200, { guest: g, stays: G.guestStays(d, g.id) });
+    if (m === 'PUT') { Object.assign(g, G.cleanGuest(await readJson(req), g), { updatedAt: new Date().toISOString() }); store.save(); return send(res, 200, g); }
+    if (m === 'DELETE') { G.deleteGuest(d, g.id); store.save(); return send(res, 200, { ok: true }); }
+  }
+  const gs = p.match(/^\/api\/admin\/guests\/(\d+)\/stays$/);
+  if (gs && m === 'POST') { const st = G.addStay(d, +gs[1], await readJson(req)); store.save(); return send(res, 200, st); }
+  const sm = p.match(/^\/api\/admin\/stays\/(\d+)$/);
+  if (sm && m === 'PUT') { const st = G.updateStay(d, +sm[1], await readJson(req)); store.save(); return send(res, 200, st); }
+  if (sm && m === 'DELETE') { d.stays = d.stays.filter(x => x.id !== +sm[1]); store.save(); return send(res, 200, { ok: true }); }
+  return false;
 }
 
 function sortSeasons() { store.data.seasons.sort((a, b) => (a.from < b.from ? -1 : a.from > b.from ? 1 : 0)); }

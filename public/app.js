@@ -56,7 +56,7 @@
     }
     const now = midnight();
     if (!same(now, TODAY)) { TODAY = now; }
-    if (state.view !== 'settings') render(); else renderTop();
+    if (state.view !== 'settings' && state.view !== 'guests') render(); else renderTop();
   }
 
   /* ---------- Kopf ---------- */
@@ -138,7 +138,7 @@
       data.events.filter(e => e.apt === a.id && e.arr < end && e.dep > start).forEach(e => {
         const si = diff(start, e.arr), ei = diff(start, e.dep);
         const c0 = si < 0 ? 2 : 3 + 2 * si, c1 = ei >= n ? 2 + 2 * n : 3 + 2 * ei;
-        h += `<button type="button" class="bar" style="grid-column:${c0} / ${c1};grid-row:${row};background:${color(a.color)}" data-event="${esc(e.id)}">${esc(e.title || 'Belegt')}</button>`;
+        h += `<button type="button" class="bar" style="grid-column:${c0} / ${c1};grid-row:${row};background:${color(a.color)}" data-event="${esc(e.id)}">${e.visit > 1 ? '★ ' : ''}${esc(e.title || 'Belegt')}</button>`;
       });
     });
     return h + '</div>';
@@ -195,11 +195,13 @@
 
   function render() {
     renderTop();
-    const set = state.view === 'settings';
-    ['#toolbar', '#summary', '#legend', '#dock', '#arrows'].forEach(s => { $(s).hidden = set; });
+    const set = state.view === 'settings', gv = state.view === 'guests';
+    ['#toolbar', '#summary', '#legend', '#dock', '#arrows'].forEach(s => { $(s).hidden = set || gv; });
     $('#setBtn').textContent = set ? '◀ Zurück zum Kalender' : '⚙ Einstellungen';
+    if ($('#guestBtn')) $('#guestBtn').textContent = gv ? '◀ Zurück zum Kalender' : '👥 Gäste';
     const v = $('#view');
     if (set) return renderSettings();
+    if (gv) return renderGuests();
     if (!data.apartments.length) { v.innerHTML = `<div class="empty">${loadError ? 'Keine Verbindung zum Server.' : 'Lade …'}</div>`; return; }
     if (state.view === 'w4') {
       $('#rangeTitle').textContent = `4 Wochen: ${fy(state.start)} bis ${fy(add(state.start, 27))}`;
@@ -250,6 +252,7 @@
         <dt>${own ? 'Von' : 'Anreise'}</dt><dd>${fl(e.arr)}</dd>
         <dt>${own ? 'Bis' : 'Abreise'}</dt><dd>${fl(e.dep)}</dd>
         <dt>Nächte</dt><dd>${diff(e.arr, e.dep)}</dd>
+        ${e.visit > 1 ? `<dt>Stammgast</dt><dd>★ ${e.visit}. Aufenthalt</dd>` : ''}
         ${e.note ? `<dt>Notiz</dt><dd>${esc(e.note)}</dd>` : ''}
         ${e.phone ? `<dt>Telefon</dt><dd><a href="tel:${esc(e.phone)}">${esc(e.phone)}</a></dd>` : ''}
         ${e.mobile ? `<dt>Handy</dt><dd><a href="tel:${esc(e.mobile)}">${esc(e.mobile)}</a></dd>` : ''}
@@ -257,8 +260,9 @@
         <dt>Quelle</dt><dd>${own ? 'Belegungsplan der Firma' : `Smoobu${e.channel ? ` · ${esc(e.channel)}` : ''}`}</dd>
       </dl>
       <div class="notice">${own ? 'Wird am PC in den Einstellungen gepflegt.' : 'Änderungen bitte vorerst in Smoobu vornehmen.'}</div>
-      <div class="row end"><button class="btn primary" type="button" id="closeB">Schließen</button></div>`);
+      <div class="row end">${MODE === 'admin' && e.guestId ? '<button class="btn" type="button" id="toGuest">Gast öffnen</button>' : ''}<button class="btn primary" type="button" id="closeB">Schließen</button></div>`);
     $('#closeB').onclick = closeOverlay;
+    if ($('#toGuest')) $('#toGuest').onclick = () => { closeOverlay(); gst.id = e.guestId; state.view = 'guests'; render(); window.scrollTo(0, 0); };
   }
 
   /* ---------- Einstellungen (nur PC) ---------- */
@@ -518,6 +522,180 @@
     };
   }
 
+  /* ---------- Gästedatenbank (nur PC) ---------- */
+
+  const gst = { q: '', filter: 'alle', id: null, list: null, detail: null, importYear: new Date().getFullYear() - 3 };
+  const euro = n => (n == null || n === '' ? '–' : `${Number(n).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`);
+  const dmy = s => (s ? fy(D(s)) : '–');
+
+  async function renderGuests(refetch = true) {
+    const v = $('#view');
+    if (MODE !== 'admin') { state.view = 'w4'; return render(); }
+    if (refetch || !gst.list) try {
+      gst.list = await api('/api/admin/guests');
+      gst.detail = gst.id ? await api(`/api/admin/guests/${gst.id}`) : null;
+    } catch (e) { gst.id = null; v.innerHTML = `<div class="notice warn">${esc(e.message)}</div>`; return; }
+    v.innerHTML = gst.detail ? guestDetail() : guestOverview();
+    bindGuests();
+  }
+
+  const aptLabel = id => { const a = gst.list.apartments.find(x => x.id === id); return a ? esc(a.name) : '–'; };
+
+  function guestOverview() {
+    const L = gst.list;
+    const q = gst.q.trim().toLowerCase();
+    let rows = L.guests.filter(g => !q || [g.name, g.email, g.phone, g.notes, ...(g.emails || [])].join(' ').toLowerCase().includes(q));
+    if (gst.filter === 'stamm') rows = rows.filter(g => g.visits >= 2);
+    if (gst.filter === 'kommend') rows = rows.filter(g => g.nextStay).sort((a, b) => (a.nextStay.start < b.nextStay.start ? -1 : 1));
+    if (gst.filter === 'doppelt') rows = rows.filter(g => g.possibleDuplicate).sort((a, b) => a.name.localeCompare(b.name));
+    const stamm = L.guests.filter(g => g.visits >= 2).length;
+    const body = rows.map(g => `<tr class="click" data-guest="${g.id}">
+      <td><b>${esc(g.name)}</b>${g.visits >= 2 ? ` <span class="badge ok" title="Stammgast">★ ${g.visits}×</span>` : ''}${g.possibleDuplicate ? ' <span class="badge warn" title="Gleicher Name wie ein anderer Gast">doppelt?</span>' : ''}</td>
+      <td class="small">${esc([g.email, g.phone].filter(Boolean).join(' · '))}</td>
+      <td>${g.visits}</td><td>${g.nights}</td>
+      <td>${g.lastStay ? `${dmy(g.lastStay.start)} <span class="small">${aptLabel(g.lastStay.aptId)} · ${euro(g.lastStay.price)}</span>` : '–'}</td>
+      <td>${g.nextStay ? `${dmy(g.nextStay.start)} <span class="small">${aptLabel(g.nextStay.aptId)}</span>` : '–'}</td>
+      <td style="text-align:right">${g.revenue ? euro(g.revenue) : '–'}</td>
+      <td>${g.ads === 'ja' ? 'ja' : g.ads === 'nein' ? 'nein' : '<span class="small">?</span>'}</td></tr>`).join('');
+    const years = []; for (let y = new Date().getFullYear(); y >= 2015; y--) years.push(y);
+    return `<div class="sbody">
+      <section class="sec"><h3>Gäste</h3>
+        <p class="d">${L.guests.length} Gäste, davon ${stamm} Stammgäste. Gäste aus Smoobu kommen bei jedem Abruf automatisch dazu und bleiben hier gespeichert, auch wenn ihr den Anbieter wechselt.</p>
+        <div class="row"><input class="in" id="gQ" placeholder="Suchen: Name, E-Mail, Telefon, Notiz" value="${esc(gst.q)}" style="max-width:340px">
+          <select class="in" id="gFilter" style="width:auto">${[['alle', 'Alle'], ['stamm', 'Stammgäste (2× und öfter)'], ['kommend', 'Mit kommender Buchung'], ['doppelt', 'Mögliche Doppelte']].map(([k, t]) => `<option value="${k}" ${gst.filter === k ? 'selected' : ''}>${t}</option>`).join('')}</select>
+          <button class="mini" type="button" id="gNew">+ Gast</button>
+          <a class="mini" href="/export/gaeste.csv" style="display:inline-flex;align-items:center;text-decoration:none;color:var(--fg)">Export für Excel (CSV)</a></div>
+        <div class="tbl"><table><thead><tr><th>Name</th><th>Kontakt</th><th>Besuche</th><th>Nächte</th><th>Letzter Aufenthalt</th><th>Nächster</th><th style="text-align:right">Umsatz</th><th>Werbung</th></tr></thead>
+        <tbody>${body || `<tr><td colspan="8" class="small">${L.guests.length ? 'Keine Treffer.' : 'Noch keine Gäste. Sobald die Smoobu-API eingerichtet ist, kommen sie automatisch. Ältere Buchungen unten übernehmen, oder mit „+ Gast“ von Hand anlegen.'}</td></tr>`}</tbody></table></div>
+      </section>
+      <section class="sec"><h3>Ältere Buchungen aus Smoobu übernehmen</h3>
+        <p class="d">Der laufende Abruf holt nur das letzte und die kommenden Jahre. Hier kannst du einmalig alle älteren Buchungen mit Preisen in die Gästedatenbank holen. Doppelte entstehen dabei nicht.</p>
+        <div class="row">${L.smoobu ? `Ab <select class="in" id="gImpYear" style="width:auto">${years.map(y => `<option ${y === gst.importYear ? 'selected' : ''}>${y}</option>`).join('')}</select>
+          <button class="mini" type="button" id="gImport">Aus Smoobu übernehmen</button>` : '<span class="badge off">kein Smoobu-API-Zugang</span> <span class="small">Erst SMOOBU_API_KEY und SMOOBU_API_SECRET in .env eintragen.</span>'}</div>
+      </section>
+      <section class="sec"><h3>Datenschutz</h3>
+        <p class="d">Vorschlag: Gäste löschen, deren letzter Aufenthalt mehr als ${L.retentionYears} Jahre zurückliegt (Löschfrist laut Verarbeitungsverzeichnis). Rechnungen bewahrst du davon unabhängig 8 Jahre in der Buchhaltung auf. Werbe-E-Mails nur an Gäste mit „Werbung: ja“.</p>
+        <div class="row">${L.expired ? `<button class="mini" type="button" id="gCleanup">${L.expired} Gäste mit Aufenthalt vor mehr als ${L.retentionYears} Jahren löschen</button>` : '<span class="small">Derzeit keine Gäste über der Löschfrist.</span>'}</div>
+      </section></div>`;
+  }
+
+  function guestDetail() {
+    const { guest: g, stays } = gst.detail;
+    const apts = gst.list.apartments.filter(a => a.source !== 'own');
+    const aptSel = (st, sel) => `<select class="in" ${st} style="width:auto"><option value="">–</option>${gst.list.apartments.map(a => `<option value="${a.id}" ${a.id === sel ? 'selected' : ''}>${esc(a.name)}</option>`).join('')}</select>`;
+    const ok = stays.filter(s => s.status !== 'storniert');
+    const sum = ok.reduce((n, s) => n + (s.price || 0), 0);
+    const nightsAll = ok.reduce((n, s) => n + diff(D(s.start), D(s.end)), 0);
+    const body = stays.map(s => {
+      const n = diff(D(s.start), D(s.end));
+      return `<tr class="${s.status === 'storniert' ? 'muted' : ''}">
+        <td><input class="in" type="date" data-st="${s.id}|start" value="${s.start}" style="width:auto"></td>
+        <td><input class="in" type="date" data-st="${s.id}|end" value="${s.end}" style="width:auto"></td>
+        <td>${n}</td>
+        <td>${aptSel(`data-st="${s.id}|aptId"`, s.aptId)}</td>
+        <td><input class="in short" data-st="${s.id}|adults" type="number" min="0" value="${s.adults}" title="Erwachsene" style="width:56px"> + <input class="in short" data-st="${s.id}|children" type="number" min="0" value="${s.children}" title="Kinder" style="width:56px"></td>
+        <td><input class="in short" data-st="${s.id}|price" value="${s.price == null ? '' : String(s.price).replace('.', ',')}" placeholder="€" style="width:100px"></td>
+        <td class="small">${s.price != null && n ? euro(s.price / n) : '–'}</td>
+        <td><input class="in" data-st="${s.id}|channel" value="${esc(s.channel)}" style="width:150px"></td>
+        <td><select class="in" data-st="${s.id}|status" style="width:auto"><option value="ok">gebucht</option><option value="storniert" ${s.status === 'storniert' ? 'selected' : ''}>storniert</option></select></td>
+        <td><input class="in" data-st="${s.id}|note" value="${esc(s.note || '')}"></td>
+        <td class="small">${s.source === 'smoobu' ? `Smoobu${s.priceManual ? ', Preis geändert' : ''}` : 'von Hand'}</td>
+        <td><button class="mini" type="button" data-stdel="${s.id}" aria-label="Aufenthalt löschen">✕</button></td></tr>`;
+    }).join('');
+    const others = gst.list.guests.filter(x => x.id !== g.id).sort((a, b) => a.name.localeCompare(b.name));
+    const sameName = others.filter(x => x.possibleDuplicate && x.name.toLowerCase().split(/\s+/).some(w => w.length > 2 && g.name.toLowerCase().includes(w)));
+    return `<div class="sbody">
+      <div class="row"><button class="btn" type="button" id="gBack">◀ Alle Gäste</button></div>
+      <section class="sec"><h3>${esc(g.name)} ${ok.length >= 2 ? `<span class="badge ok">★ Stammgast, ${ok.length} Aufenthalte</span>` : ''}</h3>
+        <p class="d">${ok.length} Aufenthalt${ok.length === 1 ? '' : 'e'}, ${nightsAll} Nächte, zusammen ${euro(sum)}. Angelegt am ${new Date(g.createdAt).toLocaleDateString('de-DE')}.</p>
+        <div class="gform">
+          <label>Name<input class="in" data-g="name" value="${esc(g.name)}"></label>
+          <label>E-Mail<input class="in" data-g="email" value="${esc(g.email)}"></label>
+          <label>Telefon<input class="in" data-g="phone" value="${esc(g.phone)}"></label>
+          <label>Werbung erlaubt<select class="in" data-g="ads"><option value="">nicht gefragt</option><option value="ja" ${g.ads === 'ja' ? 'selected' : ''}>ja</option><option value="nein" ${g.ads === 'nein' ? 'selected' : ''}>nein (widersprochen)</option></select></label>
+          <label class="wide">Adresse<input class="in" data-g="address" value="${esc(g.address)}"></label>
+          <label class="wide">Notizen (z. B. „kommt mit Hund“, „mag Fewo 3“)<textarea class="in" data-g="notes" rows="3">${esc(g.notes)}</textarea></label>
+        </div>
+        ${(g.emails || []).length ? `<p class="small">Weitere E-Mail-Adressen: ${(g.emails || []).map(esc).join(', ')}</p>` : ''}
+      </section>
+      <section class="sec"><h3>Aufenthalte und Preise</h3>
+        <p class="d">Preise sind Gesamtpreise der Buchung. Änderst du einen Preis aus Smoobu von Hand, bleibt deine Angabe beim nächsten Abruf erhalten.</p>
+        <div class="tbl"><table><thead><tr><th>Anreise</th><th>Abreise</th><th>Nächte</th><th>Wohnung</th><th>Erw. + Kinder</th><th>Preis gesamt</th><th>pro Nacht</th><th>Kanal</th><th>Status</th><th>Notiz</th><th>Quelle</th><th></th></tr></thead>
+        <tbody>${body || '<tr><td colspan="12" class="small">Noch keine Aufenthalte.</td></tr>'}</tbody></table></div>
+        <div class="row"><b>Neuer Aufenthalt:</b> <input class="in" type="date" id="nsStart" style="width:auto"> bis <input class="in" type="date" id="nsEnd" style="width:auto">
+          ${aptSel('id="nsApt"', apts[0]?.id)} <input class="in" id="nsPrice" placeholder="Preis €" style="width:100px"> <input class="in" id="nsChannel" placeholder="Kanal, z. B. Direkt" style="width:170px">
+          <button class="mini" type="button" id="nsAdd">Hinzufügen</button></div>
+      </section>
+      <section class="sec"><h3>Doppelten Eintrag zusammenführen</h3>
+        <p class="d">Ist derselbe Gast zweimal angelegt (z. B. andere E-Mail bei Booking.com), hier den anderen Eintrag wählen. Seine Aufenthalte und fehlenden Angaben kommen zu diesem Gast, der andere Eintrag verschwindet.</p>
+        <div class="row"><select class="in" id="gMergeSel" style="width:auto;max-width:420px"><option value="">– anderen Gast wählen –</option>
+          ${sameName.length ? `<optgroup label="Ähnlicher Name">${sameName.map(x => `<option value="${x.id}">${esc(x.name)} (${x.visits}×, ${esc(x.email || x.phone || 'ohne Kontakt')})</option>`).join('')}</optgroup>` : ''}
+          <optgroup label="Alle">${others.map(x => `<option value="${x.id}">${esc(x.name)} (${x.visits}×${x.lastStay ? `, zuletzt ${dmy(x.lastStay.start)}` : ''})</option>`).join('')}</optgroup></select>
+          <button class="mini" type="button" id="gMerge">Zusammenführen</button></div>
+      </section>
+      <section class="sec"><h3>Gast löschen</h3>
+        <p class="d">Löscht den Gast mit allen Aufenthalten aus dieser Datenbank, z. B. auf Wunsch des Gastes (DSGVO). In Smoobu bleibt die Buchung bestehen und käme beim nächsten Abruf wieder, solange sie im Abrufzeitraum liegt.</p>
+        <div class="row"><button class="mini" type="button" id="gDel">Gast löschen</button></div>
+      </section></div>`;
+  }
+
+  async function gAct(fn, okMsg) {
+    try { await fn(); if (okMsg) toast(okMsg); }
+    catch (e) { toast(e.message); }
+    const y = window.scrollY;
+    await renderGuests();
+    window.scrollTo(0, y);
+  }
+
+  function bindGuests() {
+    const put = (p, body) => api(p, { method: 'PUT', body });
+    const post = (p, body) => api(p, { method: 'POST', body });
+    $$('[data-guest]').forEach(r => r.onclick = () => { gst.id = +r.dataset.guest; window.scrollTo(0, 0); renderGuests(); });
+    if (!gst.detail) {
+      const q = $('#gQ');
+      q.oninput = () => { gst.q = q.value; const pos = q.selectionStart; renderGuests(false).then(() => { const n = $('#gQ'); n.focus(); n.setSelectionRange(pos, pos); }); };
+      $('#gFilter').onchange = e => { gst.filter = e.target.value; renderGuests(false); };
+      $('#gNew').onclick = () => gAct(async () => { const g = await post('/api/admin/guests', { name: 'Neuer Gast' }); gst.id = g.id; }, 'Gast angelegt. Bitte Namen eintragen.');
+      if ($('#gImport')) {
+        $('#gImpYear').onchange = e => { gst.importYear = +e.target.value; };
+        $('#gImport').onclick = () => { const b = $('#gImport'); b.disabled = true; b.textContent = 'Wird übernommen …';
+          let r = null; gAct(async () => { r = await post('/api/admin/guests/import', { fromYear: gst.importYear }); })
+            .then(() => r && toast(`${r.bookings} Buchungen gelesen: ${r.newGuests} neue Gäste, ${r.newStays} neue Aufenthalte.`)); };
+      }
+      if ($('#gCleanup')) $('#gCleanup').onclick = () => {
+        const b = $('#gCleanup');
+        if (b.dataset.armed !== '1') { b.dataset.armed = '1'; b.textContent = 'Wirklich endgültig löschen?'; b.classList.add('danger'); return; }
+        let r = null; gAct(async () => { r = await post('/api/admin/guests/cleanup'); }).then(() => r && toast(`${r.deleted} Gäste gelöscht.`));
+      };
+      return;
+    }
+    const gid = gst.detail.guest.id;
+    $('#gBack').onclick = () => { gst.id = null; renderGuests(); };
+    $$('[data-g]').forEach(i => i.onchange = () => gAct(() => put(`/api/admin/guests/${gid}`, { [i.dataset.g]: i.value }), 'Gespeichert.'));
+    $$('[data-st]').forEach(i => i.onchange = () => { const [id, k] = i.dataset.st.split('|'); gAct(() => put(`/api/admin/stays/${id}`, { [k]: i.value }), 'Gespeichert.'); });
+    $$('[data-stdel]').forEach(b => b.onclick = () => {
+      if (b.dataset.armed !== '1') { b.dataset.armed = '1'; b.textContent = 'Löschen?'; b.classList.add('danger'); return; }
+      gAct(() => api(`/api/admin/stays/${b.dataset.stdel}`, { method: 'DELETE' }), 'Aufenthalt gelöscht.');
+    });
+    $('#nsAdd').onclick = () => {
+      const body = { start: $('#nsStart').value, end: $('#nsEnd').value, aptId: $('#nsApt').value, price: $('#nsPrice').value, channel: $('#nsChannel').value.trim() || 'Direkt' };
+      if (!body.start || !body.end) return toast('Bitte Anreise und Abreise wählen.');
+      gAct(() => post(`/api/admin/guests/${gid}/stays`, body), 'Aufenthalt hinzugefügt.');
+    };
+    $('#gMerge').onclick = () => {
+      const other = +$('#gMergeSel').value;
+      if (!other) return toast('Bitte den anderen Gast wählen.');
+      const b = $('#gMerge');
+      if (b.dataset.armed !== '1') { b.dataset.armed = '1'; b.textContent = 'Wirklich zusammenführen?'; b.classList.add('danger'); return; }
+      gAct(() => post('/api/admin/guests/merge', { keepId: gid, dropId: other }), 'Zusammengeführt.');
+    };
+    $('#gDel').onclick = () => {
+      const b = $('#gDel');
+      if (b.dataset.armed !== '1') { b.dataset.armed = '1'; b.textContent = 'Wirklich mit allen Aufenthalten löschen?'; b.classList.add('danger'); return; }
+      gAct(async () => { await api(`/api/admin/guests/${gid}`, { method: 'DELETE' }); gst.id = null; }, 'Gast gelöscht.');
+    };
+  }
+
   /* ---------- Ereignisse ---------- */
 
   document.addEventListener('click', e => {
@@ -543,6 +721,7 @@
     $('#pdfBtn').onclick = () => open(true);
   }
   $('#setBtn').onclick = () => { state.view = state.view === 'settings' ? 'w4' : 'settings'; render(); window.scrollTo(0, 0); };
+  if ($('#guestBtn')) $('#guestBtn').onclick = () => { if (state.view === 'guests') state.view = 'w4'; else { state.view = 'guests'; gst.id = null; } render(); window.scrollTo(0, 0); };
 
   load();
   setInterval(load, 5 * 60000);

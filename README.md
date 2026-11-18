@@ -37,6 +37,17 @@ Danach:
 
 In der PC-Ansicht oben den Monat wählen und auf **🖨 Monat als PDF** klicken. Das PDF (A4 quer) zeigt das Monatsraster aller Wohnungen mit Ferien und Saison, darunter alle Buchungen mit Kontaktdaten. Unter jedem Balken, in der Spalte „Ergänzungen“ und im Notizbereich unten ist Platz für Handschriftliches. Direkter Link: `/export/monat.pdf?m=2026-12`.
 
+### Gästedatenbank
+
+In der PC-Ansicht oben auf **👥 Gäste** klicken. Die App führt eine eigene Liste aller Gäste mit ihren Aufenthalten (Wohnung, Zeitraum, Personen, Gesamtpreis, Preis pro Nacht, Kanal). Sie bleibt auf dem Server gespeichert, auch wenn ihr Smoobu später nicht mehr nutzt.
+
+- **Automatisch:** Bei jedem Smoobu-API-Abruf kommen neue Gäste und Buchungen dazu. Ein Gast wird über die Smoobu-Gast-ID, die E-Mail oder die Telefonnummer wiedererkannt. Stornierte Buchungen werden als „storniert“ markiert, nicht gelöscht.
+- **Ältere Buchungen:** Unter „Ältere Buchungen aus Smoobu übernehmen“ ein Startjahr wählen. Das geht beliebig oft, ohne Doppelte.
+- **Von Hand:** Gäste und Aufenthalte (z. B. Anfragen über die Bodensee-Portale) mit „+ Gast“ bzw. „Neuer Aufenthalt“ anlegen. Ein von Hand geänderter Preis bleibt beim nächsten Abruf erhalten.
+- **Stammgäste:** Im Kalender steht vor dem Namen ein ★, in der Buchungskarte „3. Aufenthalt“. Gäste mit gleichem Namen werden als „doppelt?“ markiert und lassen sich zusammenführen (z. B. Booking.com-Weiterleitungsadresse und echte E-Mail).
+- **Export:** „Export für Excel (CSV)“ liefert eine Zeile pro Aufenthalt, z. B. für einen Anbieterwechsel.
+- **Datenschutz:** Feld „Werbung erlaubt“ je Gast. Gäste, deren letzter Aufenthalt mehr als 3 Jahre zurückliegt, lassen sich gesammelt löschen. Die Gästedatenbank gibt es nur in der PC-Ansicht.
+
 ### Smoobu-API einrichten
 
 1. In Smoobu unter **Einstellungen → Erweitert → API-Schlüssel** einen Schlüssel mit Secret erzeugen.
