@@ -16,6 +16,9 @@ import os from 'node:os';
 import { monthPdf } from './report.js';
 import { fetchHolidays, expandSeasons, copySeasons } from './holidays.js';
 import { smoobuConfigured, smoobuAuthMode, listApartments as smoobuApartments, fetchReservations } from './smoobu.js';
+import * as G from './guests.js';
+import * as INV from './invoices.js';
+import { loadImage } from './image.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC = path.join(__dirname, '..', 'public');
@@ -24,6 +27,8 @@ const ADMIN_PORT = +(process.env.ADMIN_PORT || 8081);
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, '..', 'data');
 const VIEW_KEY = process.env.VIEW_KEY || '';          // optional: Zugangsschlüssel für die iPad-Ansicht
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || ''; // optional: Passwort für die PC-Ansicht
+// Testbetrieb für Rechnungen: TEST-Nummern, Wasserzeichen, eigener Ablageordner, zählen nicht im echten USt-Bericht
+const INVOICE_TEST_MODE = /^(1|true|ja|yes)$/i.test(process.env.INVOICE_TEST_MODE || '');
 const PUBLIC_URL = (process.env.PUBLIC_URL || '').replace(/\/+$/, ''); // z. B. https://kalender.example.de (Adresse der iPad-Ansicht)
 
 const store = new Store(DATA_DIR);
@@ -58,7 +63,8 @@ async function fetchSmoobu() {
   if (!apts.length) return;
   const y = new Date().getFullYear();
   try {
-    const all = await fetchReservations(`${y - 1}-01-01`, `${y + 2}-12-31`);
+    const from = `${y - 1}-01-01`, to = `${y + 2}-12-31`;
+    const all = await fetchReservations(from, to);
     if (all.length !== lastSmoobuCount) console.log(`Smoobu-API: ${all.length} Buchungen abgerufen.`);
     lastSmoobuCount = all.length;
     const now = new Date().toISOString();
@@ -69,6 +75,7 @@ async function fetchSmoobu() {
       }));
       store.data.cache[a.id] = { fetchedAt: now, error: null, events };
     }
+    syncGuests(all, { from, to });
   } catch (e) {
     for (const a of apts) {
       const prev = store.data.cache[a.id] || {};
@@ -76,6 +83,18 @@ async function fetchSmoobu() {
     }
     console.error('Smoobu-Abruf fehlgeschlagen:', e.message);
   }
+}
+
+// Gäste und Aufenthalte aus Smoobu in die eigene Gästedatenbank übernehmen (bleibt auch ohne Smoobu erhalten)
+function aptBySmoobu() {
+  return Object.fromEntries(store.data.apartments.filter(a => a.smoobuId).map(a => [String(a.smoobuId), a.id]));
+}
+function syncGuests(bookings, window) {
+  try {
+    const r = G.syncBookings(store.data, bookings, aptBySmoobu(), window);
+    if (r.newGuests || r.newStays) console.log(`Gästedatenbank: ${r.newGuests} neue Gäste, ${r.newStays} neue Aufenthalte.`);
+    return r;
+  } catch (e) { console.error('Gästedatenbank: Abgleich fehlgeschlagen:', e.message); return null; }
 }
 
 // Klappt der Smoobu-API-Abruf nicht (Fehler oder kein Zugang), zeigt der Kalender den iCal-Stand.
@@ -129,8 +148,10 @@ function calendarPayload() {
       const c = store.data.cache[a.id];
       (c?.events || []).forEach((e, i) => {
         const persons = e.adults || e.children ? `${(e.adults || 0) + (e.children || 0)} Reisende${e.children ? `, davon ${e.children} Kind${e.children > 1 ? 'er' : ''}` : ''}` : '';
+        const vi = a.source === 'smoobu' && !c.fallback && e.uid ? G.visitInfo(store.data, e.uid) : null;
         events.push({ id: `${a.id}-${e.uid || i}`, apt: a.id, start: e.start, end: e.end, title: e.summary, note: [persons, e.description].filter(Boolean).join(' · '),
-          phone: e.phone || '', mobile: '', email: e.email || '', channel: e.channel || '', source: sourceLabel(a) });
+          phone: e.phone || '', mobile: '', email: e.email || '', channel: e.channel || '', source: sourceLabel(a),
+          ...(vi ? { guestId: vi.guestId, visit: vi.visit } : {}) });
       });
     }
   }
@@ -175,10 +196,10 @@ function pdfToText(buf) {
   });
 }
 
-function readJson(req) {
+function readJson(req, limit = 1e6) {
   return new Promise((resolve, reject) => {
     let size = 0; const chunks = [];
-    req.on('data', c => { size += c.length; if (size > 1e6) { reject(new Error('zu groß')); req.destroy(); } else chunks.push(c); });
+    req.on('data', c => { size += c.length; if (size > limit) { reject(new Error('zu groß')); req.destroy(); } else chunks.push(c); });
     req.on('end', () => { try { resolve(chunks.length ? JSON.parse(Buffer.concat(chunks).toString('utf8')) : {}); } catch { reject(new Error('ungültiges JSON')); } });
     req.on('error', reject);
   });
@@ -243,7 +264,7 @@ async function handle(req, res, mode) {
     return send(res, 200, buffer, 'application/pdf', { 'Content-Disposition': `inline; filename="${filename}"` });
   }
 
-  if (p.startsWith('/api/admin/')) {
+  if (p.startsWith('/api/admin/') || p === '/export/gaeste.csv' || p.startsWith('/export/rechnung/') || p.startsWith('/export/ust-bericht.')) {
     if (mode !== 'admin') return send(res, 403, { error: 'Nur über die PC-Ansicht möglich.' });
     try { return await handleAdmin(req, res, p, url); }
     catch (e) { return send(res, 400, { error: e.message }); }
@@ -441,7 +462,215 @@ async function handleAdmin(req, res, p, url) {
     return send(res, 200, { added: rows.length });
   }
 
+  const r = await handleGuests(req, res, p, m, d);
+  if (r !== false) return r;
+  const ri = await handleInvoices(req, res, p, m, d, url);
+  if (ri !== false) return ri;
+
   return send(res, 404, { error: 'Unbekannt' });
+}
+
+/* ---------- Gästedatenbank ---------- */
+
+async function handleGuests(req, res, p, m, d) {
+  G.ensure(d);
+  const aptName = id => d.apartments.find(a => a.id === id)?.name || '';
+  if (p === '/export/gaeste.csv' && m === 'GET') {
+    const day = new Date().toISOString().slice(0, 10);
+    return send(res, 200, G.staysCsv(d, aptName), 'text/csv; charset=utf-8', { 'Content-Disposition': `attachment; filename="gaeste-${day}.csv"` });
+  }
+  if (p === '/api/admin/guests' && m === 'GET') {
+    return send(res, 200, { guests: G.guestList(d), expired: G.expiredGuests(d).length, retentionYears: G.RETENTION_YEARS,
+      smoobu: smoobuConfigured(), apartments: d.apartments.map(a => ({ id: a.id, name: a.name, nick: a.nick, color: a.color, source: a.source })) });
+  }
+  if (p === '/api/admin/guests' && m === 'POST') { const g = G.addGuest(d, await readJson(req)); store.save(); return send(res, 200, g); }
+  if (p === '/api/admin/guests/merge' && m === 'POST') {
+    const { keepId, dropId } = await readJson(req);
+    const g = G.mergeGuests(d, +keepId, +dropId); store.save(); return send(res, 200, g);
+  }
+  if (p === '/api/admin/guests/cleanup' && m === 'POST') {
+    const ids = G.expiredGuests(d); ids.forEach(id => G.deleteGuest(d, id)); store.save();
+    return send(res, 200, { deleted: ids.length });
+  }
+  if (p === '/api/admin/guests/import' && m === 'POST') {
+    const { fromYear } = await readJson(req);
+    const y = new Date().getFullYear();
+    if (!Number.isInteger(fromYear) || fromYear < 2000 || fromYear > y) throw new Error('Jahr ungültig');
+    const from = `${fromYear}-01-01`, to = `${y + 2}-12-31`;
+    const all = await fetchReservations(from, to);
+    const r = G.syncBookings(d, all, aptBySmoobu(), { from, to }); store.save();
+    return send(res, 200, { bookings: all.length, ...r });
+  }
+  const gm = p.match(/^\/api\/admin\/guests\/(\d+)$/);
+  if (gm) {
+    const g = d.guests.find(x => x.id === +gm[1]);
+    if (!g) throw new Error('Gast unbekannt');
+    if (m === 'GET') return send(res, 200, { guest: g, stays: G.guestStays(d, g.id), invoices: (d.invoices || []).filter(i => i.guestId === g.id).map(i => invSummary(d, i)) });
+    if (m === 'PUT') { Object.assign(g, G.cleanGuest(await readJson(req), g), { updatedAt: new Date().toISOString() }); store.save(); return send(res, 200, g); }
+    if (m === 'DELETE') { G.deleteGuest(d, g.id); store.save(); return send(res, 200, { ok: true }); }
+  }
+  const gs = p.match(/^\/api\/admin\/guests\/(\d+)\/stays$/);
+  if (gs && m === 'POST') { const st = G.addStay(d, +gs[1], await readJson(req)); store.save(); return send(res, 200, st); }
+  const sm = p.match(/^\/api\/admin\/stays\/(\d+)$/);
+  if (sm && m === 'PUT') { const st = G.updateStay(d, +sm[1], await readJson(req)); store.save(); return send(res, 200, st); }
+  if (sm && m === 'DELETE') { d.stays = d.stays.filter(x => x.id !== +sm[1]); store.save(); return send(res, 200, { ok: true }); }
+  return false;
+}
+
+/* ---------- Rechnungen ---------- */
+
+const INV_DIR = path.join(DATA_DIR, 'rechnungen');
+const INV_TEST_DIR = path.join(DATA_DIR, 'rechnungen-test');
+const LOGO_DIR = path.join(DATA_DIR, 'logo');
+const DEFAULT_LOGO = path.join(__dirname, 'assets', 'logo-default.png');
+let logoCache = { file: null, img: null };
+// Logo für die Rechnung, falls eingeschaltet (aufbereitet und zwischengespeichert)
+function currentLogo(S) {
+  if (!S.logo?.enabled || !S.logo.file) return null;
+  if (logoCache.file !== S.logo.file) {
+    try { logoCache = { file: S.logo.file, img: loadImage(fs.readFileSync(path.join(LOGO_DIR, S.logo.file))) }; }
+    catch (e) { console.error('Logo nicht lesbar:', e.message); logoCache = { file: S.logo.file, img: null }; }
+  }
+  return logoCache.img;
+}
+// Beim ersten Start mit Rechnungen das mitgelieferte Logo übernehmen (einmalig, danach entscheidet die Einstellung)
+function initLogo(d) {
+  const S = d.invoiceSettings;
+  if (S.logo.initialized || !fs.existsSync(DEFAULT_LOGO)) return;
+  try {
+    fs.mkdirSync(LOGO_DIR, { recursive: true });
+    if (!S.logo.file) { fs.copyFileSync(DEFAULT_LOGO, path.join(LOGO_DIR, 'logo-standard.png')); S.logo = { enabled: true, file: 'logo-standard.png', name: 'Ferienwohnungen Eberle' }; }
+    S.logo.initialized = true; store.save();
+  } catch (e) { console.error('Logo konnte nicht angelegt werden:', e.message); }
+}
+const invDir = inv => (inv.test ? INV_TEST_DIR : INV_DIR);
+function archive(inv) {
+  // Festgeschriebene Rechnung einmalig als Datei ablegen (unveränderbar, GoBD); später wird nur diese Datei ausgeliefert
+  fs.mkdirSync(invDir(inv), { recursive: true });
+  const base = path.join(invDir(inv), inv.number.replace(/[^A-Za-z0-9-]/g, '_'));
+  const xml = inv.eInvoice ? INV.xrechnungXml(inv) : null;
+  const pdf = INV.invoicePdf(inv, { xml, logo: currentLogo(store.data.invoiceSettings) }).buffer;
+  const written = [];
+  try {
+    if (xml) { fs.writeFileSync(base + '.xml', xml, { flag: 'wx' }); written.push(base + '.xml'); }
+    fs.writeFileSync(base + '.pdf', pdf, { flag: 'wx' }); written.push(base + '.pdf');
+  } catch (e) { written.forEach(f => fs.rmSync(f, { force: true })); throw e; }
+  inv.files = { pdf: path.basename(base) + '.pdf', xml: xml ? path.basename(base) + '.xml' : null };
+}
+
+function invSummary(d, i) {
+  const t = i.status === 'entwurf' ? INV.totals(i.items, i.deposit) : i.totals;
+  return { id: i.id, number: i.number, kind: i.kind, status: i.status, date: i.date || null, from: i.from, to: i.to, buyer: i.buyer.name, guestId: i.guestId, stayId: i.stayId,
+    gross: t.gross, due: t.due, paidAt: i.paidAt || null, open: INV.openAmount(i), eInvoice: !!i.eInvoice, test: !!i.test, cancelledBy: i.cancelledBy || null, refNumber: i.refNumber || null, aptName: i.aptName };
+}
+
+async function handleInvoices(req, res, p, m, d, url) {
+  INV.ensure(d);
+  initLogo(d);
+  const S = d.invoiceSettings;
+  if (p === '/api/admin/invoice-logo' && m === 'GET') {
+    if (!S.logo.file) return send(res, 404, 'Kein Logo', 'text/plain; charset=utf-8');
+    const f = path.join(LOGO_DIR, S.logo.file);
+    return send(res, 200, fs.readFileSync(f), /\.jpe?g$/i.test(f) ? 'image/jpeg' : 'image/png', { 'Cache-Control': 'no-store' });
+  }
+  if (p === '/api/admin/invoice-logo' && m === 'POST') {
+    const b = await readJson(req, 6e6);
+    const buf = Buffer.from(String(b.data || '').replace(/^data:[^,]*,/, ''), 'base64');
+    if (!buf.length || buf.length > 4e6) throw new Error('Bitte eine Bilddatei bis 4 MB wählen.');
+    const img = loadImage(buf); // prüft das Format
+    const file = `logo-${Date.now()}.${img.kind === 'jpeg' ? 'jpg' : 'png'}`;
+    fs.mkdirSync(LOGO_DIR, { recursive: true });
+    fs.writeFileSync(path.join(LOGO_DIR, file), buf);
+    const old = S.logo.file;
+    S.logo = { enabled: true, file, name: String(b.name || '').slice(0, 120), initialized: true };
+    if (old && old !== file) fs.rmSync(path.join(LOGO_DIR, old), { force: true });
+    store.save(); return send(res, 200, { ok: true, settings: S });
+  }
+  if (p === '/api/admin/invoice-settings' && m === 'GET') return send(res, 200, { settings: S, year: new Date().getFullYear() });
+  if (p === '/api/admin/invoice-settings' && m === 'PUT') { d.invoiceSettings = INV.cleanSettings(await readJson(req), S); store.save(); return send(res, 200, { settings: d.invoiceSettings }); }
+  if (p === '/api/admin/invoices' && m === 'GET') {
+    return send(res, 200, { invoices: [...d.invoices].sort((a, b) => (b.id - a.id)).map(i => invSummary(d, i)), taxation: S.taxation,
+      testMode: INVOICE_TEST_MODE, testCount: d.invoices.filter(i => i.test).length, sellerReady: !!(S.seller.name && S.seller.taxNumber) });
+  }
+  if (p === '/api/admin/invoices' && m === 'POST') {
+    const { stayId } = await readJson(req);
+    const stay = (d.stays || []).find(x => x.id === +stayId);
+    if (!stay) throw new Error('Aufenthalt unbekannt');
+    const open = d.invoices.find(i => i.stayId === stay.id && i.kind === 'rechnung' && !i.cancelledBy);
+    if (open) return send(res, 200, { id: open.id, existing: true });
+    const guest = d.guests.find(g => g.id === stay.guestId);
+    const inv = INV.draftFromStay(d, stay, guest, d.apartments.find(a => a.id === stay.aptId)?.name || '');
+    store.save();
+    return send(res, 200, { id: inv.id });
+  }
+  const rp = p.match(/^\/api\/admin\/ust-bericht$/);
+  if ((rp && m === 'GET') || ((p === '/export/ust-bericht.pdf' || p === '/export/ust-bericht.csv') && m === 'GET')) {
+    const kind = url.searchParams.get('art') === 'jahr' ? 'jahr' : 'quartal';
+    const year = +url.searchParams.get('jahr'), q = +url.searchParams.get('q') || 1;
+    if (!(year >= 2000 && year <= 2100) || !(q >= 1 && q <= 4)) throw new Error('Zeitraum ungültig');
+    const rep = INV.vatReport(d, INV.periodOf(kind, year, q), undefined, { includeTest: INVOICE_TEST_MODE });
+    if (rp) return send(res, 200, rep);
+    const fn = `USt-Bericht-${kind === 'jahr' ? year : `${year}-Q${q}`}`;
+    if (p.endsWith('.csv')) return send(res, 200, INV.vatReportCsv(rep), 'text/csv; charset=utf-8', { 'Content-Disposition': `attachment; filename="${fn}.csv"` });
+    return send(res, 200, INV.vatReportPdf(rep, S.seller.name), 'application/pdf', { 'Content-Disposition': `inline; filename="${fn}.pdf"` });
+  }
+  const ex = p.match(/^\/export\/rechnung\/(\d+)\.(pdf|xml)$/);
+  if (ex && m === 'GET') {
+    const inv = d.invoices.find(i => i.id === +ex[1]);
+    if (!inv) return send(res, 404, 'Nicht gefunden', 'text/plain; charset=utf-8');
+    const name = `${inv.kind === 'storno' ? 'Storno' : 'Rechnung'}-${inv.number || `Entwurf-${inv.id}`}`;
+    if (ex[2] === 'xml') {
+      if (inv.status !== 'ausgestellt' || !inv.files?.xml) throw new Error('Für diese Rechnung gibt es keine E-Rechnung.');
+      return send(res, 200, fs.readFileSync(path.join(invDir(inv), inv.files.xml)), 'application/xml; charset=utf-8', { 'Content-Disposition': `attachment; filename="${name}.xml"` });
+    }
+    const buf = inv.status === 'ausgestellt' && inv.files?.pdf ? fs.readFileSync(path.join(invDir(inv), inv.files.pdf)) : INV.invoicePdf(inv, { draftSettings: S, logo: currentLogo(S) }).buffer;
+    return send(res, 200, buf, 'application/pdf', { 'Content-Disposition': `inline; filename="${name}.pdf"` });
+  }
+  if (p === '/api/admin/invoices/test-cleanup' && m === 'POST') {
+    // Testrechnungen samt Storno und Dateien entfernen; echte Rechnungen bleiben unberührt
+    const gone = new Set(d.invoices.filter(i => i.test).map(i => i.id));
+    for (const i of d.invoices) if (gone.has(i.id) && i.files) for (const f of [i.files.pdf, i.files.xml]) if (f) fs.rmSync(path.join(INV_TEST_DIR, f), { force: true });
+    d.invoices = d.invoices.filter(i => !gone.has(i.id));
+    for (const i of d.invoices) { if (gone.has(i.cancelledBy)) delete i.cancelledBy; if (gone.has(i.replaces)) { delete i.replaces; delete i.replacesNumber; delete i.replacesDate; } }
+    for (const k of Object.keys(d.invoiceSettings.counters)) if (k.startsWith('TEST-')) delete d.invoiceSettings.counters[k];
+    store.save(); return send(res, 200, { ok: true, removed: gone.size });
+  }
+  const pm = p.match(/^\/api\/admin\/invoices\/(\d+)\/payments(?:\/(\d+))?$/);
+  if (pm) {
+    const inv = d.invoices.find(i => i.id === +pm[1]);
+    if (!inv) throw new Error('Rechnung unbekannt');
+    if (m === 'POST' && !pm[2]) { INV.addPayment(inv, await readJson(req)); store.save(); return send(res, 200, { ok: true }); }
+    if (m === 'DELETE' && pm[2]) { INV.removePayment(inv, +pm[2]); store.save(); return send(res, 200, { ok: true }); }
+  }
+  const im = p.match(/^\/api\/admin\/invoices\/(\d+)(?:\/(recompute|issue|cancel|correct))?$/);
+  if (!im) return false;
+  const inv = d.invoices.find(i => i.id === +im[1]);
+  if (!inv) throw new Error('Rechnung unbekannt');
+  const act = im[2];
+  if (!act && m === 'GET') {
+    const t = inv.status === 'entwurf' ? INV.totals(inv.items, inv.deposit) : inv.totals;
+    const today = new Date().toISOString().slice(0, 10);
+    return send(res, 200, { invoice: inv, totals: t, missing: inv.status === 'entwurf' ? INV.checkIssuable(S, inv) : [], settings: S,
+      schedule: inv.status === 'entwurf' ? INV.paymentSchedule(S, inv, today) : inv.schedule || [], payments: INV.paymentsOf(inv), open: INV.openAmount(inv) });
+  }
+  if (!act && m === 'PUT') { INV.updateDraft(d, inv, await readJson(req)); store.save(); return send(res, 200, { ok: true }); }
+  if (!act && m === 'DELETE') {
+    if (inv.status !== 'entwurf') throw new Error('Festgeschriebene Rechnungen werden nicht gelöscht, sondern storniert.');
+    d.invoices = d.invoices.filter(i => i.id !== inv.id); store.save(); return send(res, 200, { ok: true });
+  }
+  if (act === 'recompute' && m === 'POST') { INV.recompute(d, inv); store.save(); return send(res, 200, { ok: true }); }
+  if (act === 'issue' && m === 'POST') {
+    const before = structuredClone(d.invoiceSettings.counters);
+    INV.issue(d, inv, undefined, { test: INVOICE_TEST_MODE });
+    try { archive(inv); } catch (e) { inv.status = 'entwurf'; inv.number = null; d.invoiceSettings.counters = before; throw new Error(`Rechnung konnte nicht abgelegt werden: ${e.message}`); }
+    store.save(); return send(res, 200, { ok: true, number: inv.number });
+  }
+  if (act === 'cancel' && m === 'POST') { const st = INV.cancel(d, inv); archive(st); store.save(); return send(res, 200, { ok: true, id: st.id, number: st.number }); }
+  if (act === 'correct' && m === 'POST') {
+    const { storno, draft } = INV.correct(d, inv); archive(storno); store.save();
+    return send(res, 200, { ok: true, id: draft.id, number: storno.number });
+  }
+  return false;
 }
 
 function sortSeasons() { store.data.seasons.sort((a, b) => (a.from < b.from ? -1 : a.from > b.from ? 1 : 0)); }

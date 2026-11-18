@@ -25,6 +25,8 @@ const DEFAULTS = () => ({
   manualHolidays: [], // { id, start, end (exklusiv), name }
   holidays: { fetchedAt: null, error: null, items: [] },
   feedToken: crypto.randomBytes(12).toString('hex'),
+  guests: [], // Gästedatenbank: { id, name, email, phone, address, notes, ads, smoobuGuestIds }
+  stays: [],  // Aufenthalte: { id, guestId, aptId, start, end, price, adults, children, channel, status, source, smoobuBookingId }
   cache: {}, // aptId -> { fetchedAt, error, events: [{uid,start,end,summary,description}] }
 });
 

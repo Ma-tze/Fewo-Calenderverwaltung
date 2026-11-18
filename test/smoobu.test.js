@@ -13,7 +13,7 @@ test('HMAC-Signatur nach Smoobu-Schema (unabhängig mit Python nachgerechnet)', 
 
 test('Buchung aus der API wird übernommen', () => {
   const b = mapBooking({ id: 292, type: 'reservation', arrival: '2026-11-24', departure: '2026-12-01', apartment: { id: 38 }, channel: { id: 13, name: 'Direct booking' },
-    'guest-name': 'Steffen Hansen', email: 'g@example.org', phone: '0170 1', adults: 2, children: 1, notice: 'spät', 'is-blocked-booking': false });
+    'guest-name': 'Steffen Hansen', email: 'g@example.org', phone: '0170 1', adults: 2, children: 1, notice: 'spät', 'is-blocked-booking': false, guestId: 77, price: 640.5, 'price-paid': 'Yes' });
   assert.deepEqual(b, { uid: '292', start: '2026-11-24', end: '2026-12-01', summary: 'Steffen Hansen', aptId: 38, phone: '0170 1', email: 'g@example.org',
-    adults: 2, children: 1, notice: 'spät', channel: 'Direct booking', blocked: false, cancelled: false });
+    adults: 2, children: 1, notice: 'spät', channel: 'Direct booking', blocked: false, cancelled: false, guestId: '77', price: 640.5, pricePaid: true });
 });

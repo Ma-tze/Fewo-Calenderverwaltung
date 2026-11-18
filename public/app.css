@@ -154,3 +154,13 @@ nav.dock button[aria-current="true"] { border-color: var(--accent); box-shadow: 
 .pdfbox input { border: 2px solid var(--line); background: var(--surface); color: var(--fg); border-radius: 8px; padding: 4px 8px; min-height: var(--btn-h); font: inherit; }
 @media print { .top-actions { display: none; } }
 .compact .hd.sa { position: relative; z-index: 1; text-align: left; padding-left: 3px; }
+
+/* Gästedatenbank */
+.tbl tr.click { cursor: pointer; }
+.tbl tr.click:hover td { background: var(--soft); }
+.tbl tr.muted td { opacity: .55; }
+.gform { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px 16px; }
+.gform label { display: flex; flex-direction: column; gap: 4px; font-size: .9em; color: var(--muted); }
+.gform label .in { color: var(--fg); font-size: 1.05em; }
+.gform .wide { grid-column: 1 / -1; }
+.mini.danger { border-color: var(--warn); color: var(--warn); }

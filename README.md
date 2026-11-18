@@ -37,6 +37,37 @@ Danach:
 
 In der PC-Ansicht oben den Monat wählen und auf **🖨 Monat als PDF** klicken. Das PDF (A4 quer) zeigt das Monatsraster aller Wohnungen mit Ferien und Saison, darunter alle Buchungen mit Kontaktdaten. Unter jedem Balken, in der Spalte „Ergänzungen“ und im Notizbereich unten ist Platz für Handschriftliches. Direkter Link: `/export/monat.pdf?m=2026-12`.
 
+### Gästedatenbank
+
+In der PC-Ansicht oben auf **👥 Gäste** klicken. Die App führt eine eigene Liste aller Gäste mit ihren Aufenthalten (Wohnung, Zeitraum, Personen, Gesamtpreis, Preis pro Nacht, Kanal). Sie bleibt auf dem Server gespeichert, auch wenn ihr Smoobu später nicht mehr nutzt.
+
+- **Automatisch:** Bei jedem Smoobu-API-Abruf kommen neue Gäste und Buchungen dazu. Ein Gast wird über die Smoobu-Gast-ID, die E-Mail oder die Telefonnummer wiedererkannt. Stornierte Buchungen werden als „storniert“ markiert, nicht gelöscht.
+- **Ältere Buchungen:** Unter „Ältere Buchungen aus Smoobu übernehmen“ ein Startjahr wählen. Das geht beliebig oft, ohne Doppelte.
+- **Von Hand:** Gäste und Aufenthalte (z. B. Anfragen über die Bodensee-Portale) mit „+ Gast“ bzw. „Neuer Aufenthalt“ anlegen. Ein von Hand geänderter Preis bleibt beim nächsten Abruf erhalten.
+- **Stammgäste:** Im Kalender steht vor dem Namen ein ★, in der Buchungskarte „3. Aufenthalt“. Gäste mit gleichem Namen werden als „doppelt?“ markiert und lassen sich zusammenführen (z. B. Booking.com-Weiterleitungsadresse und echte E-Mail).
+- **Export:** „Export für Excel (CSV)“ liefert eine Zeile pro Aufenthalt, z. B. für einen Anbieterwechsel.
+- **Datenschutz:** Feld „Werbung erlaubt“ je Gast. Gäste, deren letzter Aufenthalt mehr als 3 Jahre zurückliegt, lassen sich gesammelt löschen. Die Gästedatenbank gibt es nur in der PC-Ansicht.
+
+### Rechnungen für Direktgäste
+
+**Testbetrieb:** Mit `INVOICE_TEST_MODE=1` in der `.env` bekommen festgeschriebene Rechnungen TEST-Nummern (eigener Zähler), den Aufdruck „Testrechnung“ und landen in `/data/rechnungen-test/`. Sie zählen ohne Testbetrieb nicht im USt-Bericht und lassen sich unter 🧾 Rechnungen gesammelt löschen. Für den echten Betrieb die Zeile entfernen und `docker compose up -d` ausführen.
+
+**Korrigieren:** Festgeschriebene Rechnungen werden nicht geändert. „Rechnung korrigieren“ erzeugt eine Stornorechnung und einen neuen Entwurf als Kopie; bereits gezahlte Beträge werden verrechnet.
+
+Oben auf **🧾 Rechnungen** klicken.
+
+1. Einmalig **Vermieterdaten und Preise** ausfüllen: Name, Anschrift, Steuernummer, Bank, Rechnungsnummern (Präfix, nächste Nummer), Zahlungsziel, Ist- oder Soll-Versteuerung, Preisbausteine (im Grundpreis enthaltene Personen, Mehrbelegung Erwachsene/Kinder je Nacht, Altersgrenzen, Endreinigung) und Kurtaxe nach Altersgruppen (Satz Hauptsaison und übrige Zeit, Saisons aus ⚙ Einstellungen).
+2. Rechnung anlegen: **👥 Gäste → Gast → beim Aufenthalt „+ Rechnung“**. Gast, Zeitraum, Wohnung und Preis sind vorausgefüllt. Alter der Reisenden eintragen, „Positionen neu berechnen“, bei Bedarf Positionen anpassen und Anzahlung eintragen. Alle Preise sind brutto, die Umsatzsteuer (7 %) wird herausgerechnet, die Kurtaxe bleibt ohne Umsatzsteuer.
+3. **Festschreiben:** Die Rechnung bekommt die nächste Nummer und wird als PDF im Datenordner unter `rechnungen/` abgelegt. Danach ist sie nicht mehr änderbar (GoBD). Korrekturen über **Stornieren** (Stornorechnung mit eigener Nummer).
+4. **E-Rechnung:** Häkchen „Auch als E-Rechnung“. Es entsteht eine XRechnung 3.0 (UN/CEFACT CII) als XML-Datei, zusätzlich in das PDF eingebettet. Die XML-Datei ist die gültige E-Rechnung.
+5. **Zahlungsplan:** Unter „Vermieterdaten und Preise → Zahlungsbedingungen“ Anzahlung in %, deren Frist, ab wie vielen Tagen vor Anreise eine Anzahlung verlangt wird und wann die Restzahlung fällig ist. Ist die Anreise näher, ist der ganze Betrag fällig (spätestens am Anreisetag). Je Rechnung lässt sich „ganzer Betrag auf einmal“ wählen.
+6. **QR-Code:** Für jede Zahlung (Anzahlung, Rest oder Gesamtbetrag) steht ein GiroCode auf der Rechnung, den der Gast mit der Banking-App scannt. Voraussetzung: IBAN und Name in den Vermieterdaten.
+7. **Zahlungseingänge** in der Rechnung erfassen (Datum, Betrag). Bei Ist-Versteuerung zählt der Bericht genau diese Zahlungen, anteilig nach Steuersatz.
+
+**Umsatzsteuer-Bericht:** In der Rechnungsliste Jahr und Quartal wählen, dann Quartals- oder Jahresbericht als PDF oder CSV. Enthält Kennzahl 86/81 mit Steuer, alle Rechnungen des Zeitraums und getrennt zur Information die Aufenthalte über Airbnb/Booking ohne App-Rechnung.
+
+Wichtig: Der Datenordner (Docker-Volume `fewo-data`) enthält jetzt Rechnungen, die 8 Jahre aufbewahrt werden müssen. Bitte regelmäßig außerhalb des Servers sichern.
+
 ### Smoobu-API einrichten
 
 1. In Smoobu unter **Einstellungen → Erweitert → API-Schlüssel** einen Schlüssel mit Secret erzeugen.
