@@ -732,15 +732,17 @@
     const L = ivs.list;
     const yrs = []; for (let y = new Date().getFullYear() + 1; y >= new Date().getFullYear() - 6; y--) yrs.push(y);
     const rows = L.invoices.map(i => `<tr class="click" data-inv="${i.id}">
-      <td><b>${esc(i.number || 'Entwurf')}</b>${i.kind === 'storno' ? ' <span class="badge warn">Storno</span>' : ''}${i.cancelledBy ? ' <span class="badge off">storniert</span>' : ''}${i.eInvoice ? ' <span class="badge ok" title="E-Rechnung">E</span>' : ''}</td>
+      <td><b>${esc(i.number || 'Entwurf')}</b>${i.kind === 'storno' ? ' <span class="badge warn">Storno</span>' : ''}${i.cancelledBy ? ' <span class="badge off">storniert</span>' : ''}${i.eInvoice ? ' <span class="badge ok" title="E-Rechnung">E</span>' : ''}${i.test ? ' <span class="badge warn">Test</span>' : ''}</td>
       <td>${i.date ? dmy(i.date) : '<span class="small">noch nicht festgeschrieben</span>'}</td>
       <td>${esc(i.buyer)}</td><td class="small">${dmy(i.from)} – ${dmy(i.to)}${i.aptName ? ` · ${esc(i.aptName)}` : ''}</td>
       <td style="text-align:right">${euro(i.gross)}</td>
-      <td>${i.status === 'entwurf' ? '<span class="badge off">Entwurf</span>' : i.paidAt ? `<span class="badge ok">${i.kind === 'storno' ? 'erstattet' : 'bezahlt'} ${dmy(i.paidAt)}</span>` : `<span class="badge err">offen ${euro(i.open)}</span>`}</td></tr>`).join('');
+      <td>${i.status === 'entwurf' ? '<span class="badge off">Entwurf</span>' : i.cancelledBy ? '<span class="badge off">storniert</span>' : i.paidAt ? `<span class="badge ok">${i.kind === 'storno' ? 'erstattet' : 'bezahlt'} ${dmy(i.paidAt)}</span>` : `<span class="badge err">offen ${euro(i.open)}</span>`}</td></tr>`).join('');
     return `<div class="sbody">
+      ${L.testMode ? `<div class="notice warn"><b>Testbetrieb:</b> Festgeschriebene Rechnungen bekommen TEST-Nummern und den Aufdruck „Testrechnung“. Der echte Nummernkreis bleibt unberührt, nichts wird verschickt.${L.testCount ? ` <button class="mini" type="button" id="ivTestDel">${L.testCount} Testrechnung${L.testCount > 1 ? 'en' : ''} löschen</button>` : ''}</div>`
+        : L.testCount ? `<div class="notice">Aus dem Testbetrieb sind noch ${L.testCount} Testrechnung${L.testCount > 1 ? 'en' : ''} vorhanden. Sie zählen nicht im USt-Bericht. <button class="mini" type="button" id="ivTestDel">Testrechnungen löschen</button></div>` : ''}
       ${L.sellerReady ? '' : '<div class="notice warn">Bitte zuerst unter „Vermieterdaten und Preise“ Name, Anschrift und Steuernummer eintragen.</div>'}
       <section class="sec"><h3>Rechnungen</h3>
-        <p class="d">Eine neue Rechnung legst du beim Gast an: 👥 Gäste → Gast öffnen → beim Aufenthalt „Rechnung“. Festgeschriebene Rechnungen sind nicht mehr änderbar, Korrekturen laufen über „Stornieren“.</p>
+        <p class="d">Eine neue Rechnung legst du beim Gast an: 👥 Gäste → Gast öffnen → beim Aufenthalt „Rechnung“. Festgeschriebene Rechnungen sind nicht mehr änderbar, Korrekturen laufen über „Rechnung korrigieren“.</p>
         <div class="row"><button class="mini" type="button" id="ivSet">Vermieterdaten und Preise</button><button class="mini" type="button" id="ivToGuests">Zu den Gästen</button></div>
         <div class="tbl"><table><thead><tr><th>Nummer</th><th>Datum</th><th>Gast</th><th>Zeitraum</th><th style="text-align:right">Betrag</th><th>Status</th></tr></thead>
         <tbody>${rows || '<tr><td colspan="6" class="small">Noch keine Rechnungen.</td></tr>'}</tbody></table></div>
@@ -840,7 +842,9 @@
           ${open > 0.005 ? `<div class="row"><b>Offen: ${euro(open)}</b> · ${I.kind === 'storno' ? 'Erstattet' : 'Eingang'} am <input class="in" type="date" id="payDate" value="${iso(new Date())}" style="width:auto">
             Betrag <input class="in short" id="payAmt" value="${num2(nextInstallment(schedule, payments, open))}" style="width:100px"> <input class="in" id="payNote" placeholder="Notiz, z. B. Anzahlung" style="width:180px">
             <button class="mini" type="button" id="payAdd">Zahlung erfassen</button></div>` : `<div class="row"><span class="badge ok">${I.kind === 'storno' ? 'vollständig erstattet' : 'vollständig bezahlt'}${I.paidAt ? ` am ${dmy(I.paidAt)}` : ''}</span></div>`}
-          ${I.kind === 'rechnung' && !I.cancelledBy ? '<div class="row"><button class="mini" type="button" id="ivCancel">Rechnung stornieren</button><span class="small">Erstellt eine Stornorechnung mit neuer Nummer. Danach kannst du beim Gast eine neue Rechnung schreiben.</span></div>' : ''}
+          ${I.kind === 'rechnung' && !I.cancelledBy ? `<h3 style="font-size:1.05em">Ändern</h3>
+          <div class="row"><button class="btn primary" type="button" id="ivCorrect">Rechnung korrigieren</button><span class="small">Storniert diese Rechnung (Stornorechnung mit neuer Nummer) und legt eine Kopie als Entwurf an, den du ändern und neu festschreiben kannst.${payments.some(p => !p.implicit) ? ' Bereits gezahlte Beträge werden mit der neuen Rechnung verrechnet.' : ''}</span></div>
+          <div class="row"><button class="mini" type="button" id="ivCancel">Nur stornieren</button><span class="small">Zum Beispiel wenn der Gast ganz absagt. Gezahlte Beträge erfasst du dann bei der Stornorechnung als Erstattung.</span></div>` : ''}
         </section></div>`;
     }
     const items = I.items.map((it, i) => `<tr>
@@ -853,6 +857,7 @@
       <td><button class="mini" type="button" data-itdel="${i}" aria-label="Position löschen">✕</button></td></tr>`).join('');
     return `<div class="sbody">${head}
       <section class="sec"><h3>Rechnungsentwurf für ${esc(b.name)}</h3>
+        ${I.replacesNumber ? `<div class="notice">Korrektur zu Rechnung ${esc(I.replacesNumber)} (storniert). ${I.deposit ? `Bereits gezahlte ${euro(I.deposit)} sind unten als „Anzahlung erhalten“ eingetragen und werden abgezogen.` : ''}</div>` : ''}
         <div class="gform">
           <label>Name / Firma<input class="in" data-b="name" value="${esc(b.name)}"></label>
           <label>Straße<input class="in" data-b="street" value="${esc(b.street)}"></label>
@@ -919,6 +924,11 @@
     if (ivs.page === 'list') {
       $$('[data-inv]').forEach(r => r.onclick = () => openInvoice(+r.dataset.inv));
       $('#ivSet').onclick = () => { ivs.page = 'settings'; renderInvoices(); };
+      if ($('#ivTestDel')) $('#ivTestDel').onclick = () => {
+        const b = $('#ivTestDel');
+        if (b.dataset.armed !== '1') { b.dataset.armed = '1'; b.textContent = 'Wirklich alle Testrechnungen löschen?'; b.classList.add('danger'); return; }
+        iAct(() => post('/api/admin/invoices/test-cleanup'), 'Testrechnungen gelöscht.');
+      };
       $('#ivToGuests').onclick = () => { state.view = 'guests'; gst.id = null; render(); };
       $('#ivY').onchange = e => { ivs.year = +e.target.value; };
       $('#ivQ').onchange = e => { ivs.q = +e.target.value; };
@@ -951,6 +961,11 @@
         if (b.dataset.armed !== '1') { b.dataset.armed = '1'; b.textContent = 'Löschen?'; b.classList.add('danger'); return; }
         iAct(() => api(`${url}/payments/${b.dataset.paydel}`, { method: 'DELETE' }), 'Zahlung gelöscht.');
       });
+      if ($('#ivCorrect')) $('#ivCorrect').onclick = () => {
+        const b = $('#ivCorrect');
+        if (b.dataset.armed !== '1') { b.dataset.armed = '1'; b.textContent = 'Wirklich stornieren und neu schreiben?'; b.classList.add('danger'); return; }
+        let r = null; iAct(async () => { r = await post(`${url}/correct`); ivs.id = r.id; }).then(() => r && toast(`Storniert mit ${r.number}. Neuer Entwurf ist offen.`));
+      };
       if ($('#ivCancel')) $('#ivCancel').onclick = () => {
         const b = $('#ivCancel');
         if (b.dataset.armed !== '1') { b.dataset.armed = '1'; b.textContent = 'Wirklich stornieren?'; b.classList.add('danger'); return; }

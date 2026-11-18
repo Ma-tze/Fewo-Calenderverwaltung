@@ -175,3 +175,37 @@ test('Erwachsene nur als Anzahl, Kinder mit Alter; alte Entwürfe mit Alterslist
   const fresh = I.draftFromStay(d, { id: 5, start: '2026-08-01', end: '2026-08-05', price: 400, adults: 2, children: 1 }, { id: 1, name: 'X' }, 'Fewo 3');
   assert.deepEqual([fresh.input.adults, fresh.input.childAges], [2, [10]]);
 });
+
+test('Rechnung korrigieren: Storno, Kopie als Entwurf, Zahlungen werden verrechnet', () => {
+  const { d, inv } = setup();
+  I.issue(d, inv, '2026-06-01');
+  I.addPayment(inv, { date: '2026-06-05', amount: '300' });
+  const { storno, draft } = I.correct(d, inv, '2026-06-10');
+  assert.equal(inv.cancelledBy, storno.id);
+  assert.equal(storno.number, 'R-2026-002');
+  assert.equal(I.openAmount(storno), 0); // Storno ausgeglichen, nichts zu erstatten
+  assert.equal(draft.status, 'entwurf');
+  assert.equal(draft.deposit, 500); // 200 vor Rechnung + 300 überwiesen
+  assert.deepEqual(draft.items, inv.items);
+  assert.equal(draft.replacesNumber, 'R-2026-001');
+  I.updateDraft(d, draft, { input: { adults: 2 } }); I.recompute(d, draft);
+  I.issue(d, draft, '2026-06-11');
+  assert.equal(draft.number, 'R-2026-003');
+  // Ist-Versteuerung: Summe über alle drei Belege = tatsächlich vereinnahmt (500 €)
+  const rep = I.vatReport(d, I.periodOf('quartal', 2026, 2), '2026-07-01');
+  const gross = rep.rows.reduce((a, r) => a + r.gross, 0);
+  assert.ok(Math.abs(gross - 500) < 0.05, String(gross));
+});
+
+test('Testbetrieb: eigener TEST-Nummernkreis, zählt nur im Testbetrieb im USt-Bericht', () => {
+  const { d, inv } = setup();
+  I.issue(d, inv, '2026-06-01', { test: true });
+  assert.equal(inv.number, 'TEST-2026-001'); assert.equal(inv.test, true);
+  assert.equal(d.invoiceSettings.counters[2026], undefined);
+  const st = I.cancel(d, inv, '2026-06-02');
+  assert.equal(st.number, 'TEST-2026-002'); assert.equal(st.test, true);
+  const per = I.periodOf('quartal', 2026, 2);
+  assert.equal(I.vatReport(d, per, '2026-07-01').rows.length, 0);
+  assert.ok(I.vatReport(d, per, '2026-07-01', { includeTest: true }).rows.length > 0);
+  assert.ok(I.invoicePdf(inv).buffer.length > 1000);
+});

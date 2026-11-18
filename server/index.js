@@ -26,6 +26,8 @@ const ADMIN_PORT = +(process.env.ADMIN_PORT || 8081);
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, '..', 'data');
 const VIEW_KEY = process.env.VIEW_KEY || '';          // optional: Zugangsschlüssel für die iPad-Ansicht
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || ''; // optional: Passwort für die PC-Ansicht
+// Testbetrieb für Rechnungen: TEST-Nummern, Wasserzeichen, eigener Ablageordner, zählen nicht im echten USt-Bericht
+const INVOICE_TEST_MODE = /^(1|true|ja|yes)$/i.test(process.env.INVOICE_TEST_MODE || '');
 const PUBLIC_URL = (process.env.PUBLIC_URL || '').replace(/\/+$/, ''); // z. B. https://kalender.example.de (Adresse der iPad-Ansicht)
 
 const store = new Store(DATA_DIR);
@@ -517,10 +519,12 @@ async function handleGuests(req, res, p, m, d) {
 /* ---------- Rechnungen ---------- */
 
 const INV_DIR = path.join(DATA_DIR, 'rechnungen');
+const INV_TEST_DIR = path.join(DATA_DIR, 'rechnungen-test');
+const invDir = inv => (inv.test ? INV_TEST_DIR : INV_DIR);
 function archive(inv) {
   // Festgeschriebene Rechnung einmalig als Datei ablegen (unveränderbar, GoBD); später wird nur diese Datei ausgeliefert
-  fs.mkdirSync(INV_DIR, { recursive: true });
-  const base = path.join(INV_DIR, inv.number.replace(/[^A-Za-z0-9-]/g, '_'));
+  fs.mkdirSync(invDir(inv), { recursive: true });
+  const base = path.join(invDir(inv), inv.number.replace(/[^A-Za-z0-9-]/g, '_'));
   const xml = inv.eInvoice ? INV.xrechnungXml(inv) : null;
   const pdf = INV.invoicePdf(inv, { xml }).buffer;
   const written = [];
@@ -534,7 +538,7 @@ function archive(inv) {
 function invSummary(d, i) {
   const t = i.status === 'entwurf' ? INV.totals(i.items, i.deposit) : i.totals;
   return { id: i.id, number: i.number, kind: i.kind, status: i.status, date: i.date || null, from: i.from, to: i.to, buyer: i.buyer.name, guestId: i.guestId, stayId: i.stayId,
-    gross: t.gross, due: t.due, paidAt: i.paidAt || null, open: INV.openAmount(i), eInvoice: !!i.eInvoice, cancelledBy: i.cancelledBy || null, refNumber: i.refNumber || null, aptName: i.aptName };
+    gross: t.gross, due: t.due, paidAt: i.paidAt || null, open: INV.openAmount(i), eInvoice: !!i.eInvoice, test: !!i.test, cancelledBy: i.cancelledBy || null, refNumber: i.refNumber || null, aptName: i.aptName };
 }
 
 async function handleInvoices(req, res, p, m, d, url) {
@@ -543,7 +547,8 @@ async function handleInvoices(req, res, p, m, d, url) {
   if (p === '/api/admin/invoice-settings' && m === 'GET') return send(res, 200, { settings: S, year: new Date().getFullYear() });
   if (p === '/api/admin/invoice-settings' && m === 'PUT') { d.invoiceSettings = INV.cleanSettings(await readJson(req), S); store.save(); return send(res, 200, { settings: d.invoiceSettings }); }
   if (p === '/api/admin/invoices' && m === 'GET') {
-    return send(res, 200, { invoices: [...d.invoices].sort((a, b) => (b.id - a.id)).map(i => invSummary(d, i)), taxation: S.taxation, sellerReady: !!(S.seller.name && S.seller.taxNumber) });
+    return send(res, 200, { invoices: [...d.invoices].sort((a, b) => (b.id - a.id)).map(i => invSummary(d, i)), taxation: S.taxation,
+      testMode: INVOICE_TEST_MODE, testCount: d.invoices.filter(i => i.test).length, sellerReady: !!(S.seller.name && S.seller.taxNumber) });
   }
   if (p === '/api/admin/invoices' && m === 'POST') {
     const { stayId } = await readJson(req);
@@ -561,7 +566,7 @@ async function handleInvoices(req, res, p, m, d, url) {
     const kind = url.searchParams.get('art') === 'jahr' ? 'jahr' : 'quartal';
     const year = +url.searchParams.get('jahr'), q = +url.searchParams.get('q') || 1;
     if (!(year >= 2000 && year <= 2100) || !(q >= 1 && q <= 4)) throw new Error('Zeitraum ungültig');
-    const rep = INV.vatReport(d, INV.periodOf(kind, year, q));
+    const rep = INV.vatReport(d, INV.periodOf(kind, year, q), undefined, { includeTest: INVOICE_TEST_MODE });
     if (rp) return send(res, 200, rep);
     const fn = `USt-Bericht-${kind === 'jahr' ? year : `${year}-Q${q}`}`;
     if (p.endsWith('.csv')) return send(res, 200, INV.vatReportCsv(rep), 'text/csv; charset=utf-8', { 'Content-Disposition': `attachment; filename="${fn}.csv"` });
@@ -574,10 +579,19 @@ async function handleInvoices(req, res, p, m, d, url) {
     const name = `${inv.kind === 'storno' ? 'Storno' : 'Rechnung'}-${inv.number || `Entwurf-${inv.id}`}`;
     if (ex[2] === 'xml') {
       if (inv.status !== 'ausgestellt' || !inv.files?.xml) throw new Error('Für diese Rechnung gibt es keine E-Rechnung.');
-      return send(res, 200, fs.readFileSync(path.join(INV_DIR, inv.files.xml)), 'application/xml; charset=utf-8', { 'Content-Disposition': `attachment; filename="${name}.xml"` });
+      return send(res, 200, fs.readFileSync(path.join(invDir(inv), inv.files.xml)), 'application/xml; charset=utf-8', { 'Content-Disposition': `attachment; filename="${name}.xml"` });
     }
-    const buf = inv.status === 'ausgestellt' && inv.files?.pdf ? fs.readFileSync(path.join(INV_DIR, inv.files.pdf)) : INV.invoicePdf(inv, { draftSettings: S }).buffer;
+    const buf = inv.status === 'ausgestellt' && inv.files?.pdf ? fs.readFileSync(path.join(invDir(inv), inv.files.pdf)) : INV.invoicePdf(inv, { draftSettings: S }).buffer;
     return send(res, 200, buf, 'application/pdf', { 'Content-Disposition': `inline; filename="${name}.pdf"` });
+  }
+  if (p === '/api/admin/invoices/test-cleanup' && m === 'POST') {
+    // Testrechnungen samt Storno und Dateien entfernen; echte Rechnungen bleiben unberührt
+    const gone = new Set(d.invoices.filter(i => i.test).map(i => i.id));
+    for (const i of d.invoices) if (gone.has(i.id) && i.files) for (const f of [i.files.pdf, i.files.xml]) if (f) fs.rmSync(path.join(INV_TEST_DIR, f), { force: true });
+    d.invoices = d.invoices.filter(i => !gone.has(i.id));
+    for (const i of d.invoices) { if (gone.has(i.cancelledBy)) delete i.cancelledBy; if (gone.has(i.replaces)) { delete i.replaces; delete i.replacesNumber; delete i.replacesDate; } }
+    for (const k of Object.keys(d.invoiceSettings.counters)) if (k.startsWith('TEST-')) delete d.invoiceSettings.counters[k];
+    store.save(); return send(res, 200, { ok: true, removed: gone.size });
   }
   const pm = p.match(/^\/api\/admin\/invoices\/(\d+)\/payments(?:\/(\d+))?$/);
   if (pm) {
@@ -586,7 +600,7 @@ async function handleInvoices(req, res, p, m, d, url) {
     if (m === 'POST' && !pm[2]) { INV.addPayment(inv, await readJson(req)); store.save(); return send(res, 200, { ok: true }); }
     if (m === 'DELETE' && pm[2]) { INV.removePayment(inv, +pm[2]); store.save(); return send(res, 200, { ok: true }); }
   }
-  const im = p.match(/^\/api\/admin\/invoices\/(\d+)(?:\/(recompute|issue|cancel))?$/);
+  const im = p.match(/^\/api\/admin\/invoices\/(\d+)(?:\/(recompute|issue|cancel|correct))?$/);
   if (!im) return false;
   const inv = d.invoices.find(i => i.id === +im[1]);
   if (!inv) throw new Error('Rechnung unbekannt');
@@ -605,11 +619,15 @@ async function handleInvoices(req, res, p, m, d, url) {
   if (act === 'recompute' && m === 'POST') { INV.recompute(d, inv); store.save(); return send(res, 200, { ok: true }); }
   if (act === 'issue' && m === 'POST') {
     const before = structuredClone(d.invoiceSettings.counters);
-    INV.issue(d, inv);
+    INV.issue(d, inv, undefined, { test: INVOICE_TEST_MODE });
     try { archive(inv); } catch (e) { inv.status = 'entwurf'; inv.number = null; d.invoiceSettings.counters = before; throw new Error(`Rechnung konnte nicht abgelegt werden: ${e.message}`); }
     store.save(); return send(res, 200, { ok: true, number: inv.number });
   }
   if (act === 'cancel' && m === 'POST') { const st = INV.cancel(d, inv); archive(st); store.save(); return send(res, 200, { ok: true, id: st.id, number: st.number }); }
+  if (act === 'correct' && m === 'POST') {
+    const { storno, draft } = INV.correct(d, inv); archive(storno); store.save();
+    return send(res, 200, { ok: true, id: draft.id, number: storno.number });
+  }
   return false;
 }
 

@@ -224,17 +224,20 @@ export function paymentsOf(inv) {
   return list.sort((a, b) => (a.date < b.date ? -1 : 1));
 }
 
+// Zu zahlen bzw. bei Storno zu erstatten: erstattet wird nur, was auf die alte Rechnung tatsächlich überwiesen wurde
+const dueOf = inv => (inv.kind === 'storno' && inv.refundDue != null ? inv.refundDue : Math.abs(inv.totals.due));
+
 export function openAmount(inv) {
   if (inv.status !== 'ausgestellt') return null;
   const paid = r2((inv.payments || []).reduce((a, p) => a + p.amount, 0));
-  return r2(Math.abs(inv.totals.due) - paid);
+  return r2(dueOf(inv) - paid);
 }
 
 function refreshPaid(inv) {
-  const due = Math.abs(inv.totals.due);
+  const due = dueOf(inv);
   let sum = 0; inv.paidAt = null;
   for (const p of [...(inv.payments || [])].sort((a, b) => (a.date < b.date ? -1 : 1))) { sum = r2(sum + p.amount); if (sum >= due - 0.005) { inv.paidAt = p.date; break; } }
-  if (!(due > 0.005) && (inv.payments || []).length === 0 && inv.kind === 'rechnung') inv.paidAt = inv.date;
+  if (!(due > 0.005) && (inv.payments || []).length === 0) inv.paidAt = inv.date;
 }
 
 export function addPayment(inv, b) {
@@ -348,18 +351,22 @@ export function checkIssuable(S, inv) {
   return miss;
 }
 
-function nextNumber(S, year) {
-  S.counters[year] = (S.counters[year] || 0) + 1;
-  return `${S.numberPrefix ? S.numberPrefix + '-' : ''}${year}-${String(S.counters[year]).padStart(3, '0')}`;
+// Im Testbetrieb eigener Nummernkreis TEST-Jahr-Nr., der echte Zähler bleibt unberührt
+function nextNumber(S, year, test = false) {
+  const key = test ? `TEST-${year}` : year;
+  S.counters[key] = (S.counters[key] || 0) + 1;
+  const prefix = test ? 'TEST' : S.numberPrefix;
+  return `${prefix ? prefix + '-' : ''}${year}-${String(S.counters[key]).padStart(3, '0')}`;
 }
 
-export function issue(d, inv, today = new Date().toISOString().slice(0, 10)) {
+export function issue(d, inv, today = new Date().toISOString().slice(0, 10), { test = false } = {}) {
   ensure(d);
   const S = d.invoiceSettings;
   if (inv.status !== 'entwurf') throw new Error('Schon festgeschrieben');
   const miss = checkIssuable(S, inv);
   if (miss.length) throw new Error(`Bitte noch ergänzen: ${miss.join(', ')}.`);
-  inv.number = nextNumber(S, +today.slice(0, 4));
+  if (test) inv.test = true; else delete inv.test;
+  inv.number = nextNumber(S, +today.slice(0, 4), !!inv.test);
   inv.date = today;
   inv.schedule = paymentSchedule(S, inv, today);
   inv.dueDate = inv.schedule.length ? inv.schedule[inv.schedule.length - 1].dueDate : today;
@@ -381,16 +388,41 @@ export function cancel(d, inv, today = new Date().toISOString().slice(0, 10)) {
     id: nextId(d.invoices), kind: 'storno', refId: inv.id, refNumber: inv.number, refDate: inv.date, stayId: inv.stayId, guestId: inv.guestId,
     buyer: structuredClone(inv.buyer), from: inv.from, to: inv.to, aptName: inv.aptName, input: structuredClone(inv.input),
     items: inv.items.map(it => ({ ...it, qty: -it.qty })), deposit: -inv.deposit, note: `Stornorechnung zu Rechnung ${inv.number} vom ${de(inv.date)}.`,
-    eInvoice: inv.eInvoice, createdAt: new Date().toISOString(),
+    eInvoice: inv.eInvoice, createdAt: new Date().toISOString(), ...(inv.test ? { test: true } : {}),
   };
-  st.number = nextNumber(S, +today.slice(0, 4));
+  st.number = nextNumber(S, +today.slice(0, 4), !!inv.test);
   st.date = today; st.dueDate = today;
   st.seller = structuredClone(inv.seller); st.footer = inv.footer;
   st.totals = totals(st.items, st.deposit);
   st.status = 'ausgestellt'; st.issuedAt = new Date().toISOString(); st.schedule = []; st.payments = [];
+  st.refundDue = Math.min(Math.abs(st.totals.due), r2((inv.payments || []).reduce((a, p) => a + p.amount, 0)));
+  refreshPaid(st);
   inv.cancelledBy = st.id;
   d.invoices.push(st);
   return st;
+}
+
+/**
+ * Festgeschriebene Rechnung korrigieren: Storno mit neuer Nummer und ein neuer Entwurf als Kopie.
+ * Bereits gezahlte Beträge werden nicht erstattet, sondern mit der neuen Rechnung verrechnet
+ * (Storno gilt damit als ausgeglichen, der Entwurf führt sie als bereits erhaltene Zahlung).
+ */
+export function correct(d, inv, today = new Date().toISOString().slice(0, 10)) {
+  const st = cancel(d, inv, today);
+  const paid = r2((inv.payments || []).reduce((a, p) => a + p.amount, 0));
+  const carry = Math.min(paid, openAmount(st));
+  if (carry > 0.005) {
+    st.payments.push({ id: 1, date: today, amount: carry, note: 'verrechnet mit der neuen Rechnung' });
+    refreshPaid(st);
+  }
+  const draft = {
+    id: nextId(d.invoices), status: 'entwurf', kind: 'rechnung', number: null, stayId: inv.stayId, guestId: inv.guestId,
+    buyer: structuredClone(inv.buyer), from: inv.from, to: inv.to, aptName: inv.aptName, input: structuredClone(inv.input),
+    items: structuredClone(inv.items), deposit: r2((inv.deposit || 0) + carry), note: inv.note, eInvoice: inv.eInvoice,
+    replaces: inv.id, replacesNumber: inv.number, replacesDate: inv.date, createdAt: new Date().toISOString(),
+  };
+  d.invoices.push(draft);
+  return { storno: st, draft };
 }
 
 /* ---------- PDF ---------- */
@@ -413,6 +445,7 @@ export function invoicePdf(inv, { draftSettings = null, xml = null } = {}) {
   const L = 56, R = 539, MUTED = '#5f6863', LINE = '#c9d0cc';
   const title = inv.kind === 'storno' ? 'Stornorechnung' : 'Rechnung';
   if (draft) doc.text(L, 30, 'ENTWURF – keine gültige Rechnung', { size: 11, bold: true, color: '#b03a2e' });
+  else if (inv.test) doc.text(L, 30, 'TESTRECHNUNG – nur zur Probe, keine gültige Rechnung', { size: 11, bold: true, color: '#b03a2e' });
   // Absender
   const sender = [sl.name, sl.street, `${sl.zip} ${sl.city}`].filter(x => x.trim()).join(' · ');
   doc.text(L, 132, sender, { size: 7, color: MUTED });
@@ -466,7 +499,7 @@ export function invoicePdf(inv, { draftSettings = null, xml = null } = {}) {
     if (v.rate) row(`darin ${v.rate} % USt auf ${eur(v.net)} netto`, eur(v.tax), { color: MUTED });
     else row('Kurtaxe, nicht umsatzsteuerbar', eur(v.gross), { color: MUTED });
   }
-  if (t.deposit) row(inv.kind === 'storno' ? 'Erstattung Anzahlung' : 'abzüglich erhaltene Anzahlung', eur(-t.deposit));
+  if (t.deposit) row(inv.kind === 'storno' ? 'Erstattung Anzahlung' : inv.replacesNumber ? 'abzüglich bereits gezahlt' : 'abzüglich erhaltene Anzahlung', eur(-t.deposit));
   doc.stroke('#1d2420', 0.8).line(300, y - 9, R, y - 9);
   row(inv.kind === 'storno' ? 'Gutschrift' : 'Zu zahlen', eur(t.due), { bold: true, size: 11 });
   y += 10;
@@ -498,6 +531,7 @@ export function invoicePdf(inv, { draftSettings = null, xml = null } = {}) {
     }
     texts.push(`Bitte überweisen Sie ${sched.length > 1 ? 'die Beträge' : 'den Betrag'} zu den genannten Terminen auf das unten genannte Konto. Verwendungszweck: ${ref}.`);
   }
+  if (inv.replacesNumber) texts.push(`Diese Rechnung ersetzt die stornierte Rechnung ${inv.replacesNumber} vom ${de(inv.replacesDate)}.`);
   if (inv.input?.ktExempt === 'Geschäftsreise') texts.push('Geschäftsreise: von der Kurtaxe befreit.');
   if (inv.note) texts.push(inv.note);
   if (inv.buyer.vatId) texts.push(`USt-IdNr. des Leistungsempfängers: ${inv.buyer.vatId}`);
@@ -626,10 +660,11 @@ export function periodOf(kind, year, q) {
  * Soll-Versteuerung: maßgeblich ist das Ende des Leistungszeitraums (Abreise).
  * Ist-Versteuerung: maßgeblich ist der Zahlungseingang (bezahlt am).
  */
-export function vatReport(d, period, today = new Date().toISOString().slice(0, 10)) {
+export function vatReport(d, period, today = new Date().toISOString().slice(0, 10), { includeTest = false } = {}) {
   ensure(d);
   const S = d.invoiceSettings;
-  const issued = d.invoices.filter(i => i.status === 'ausgestellt');
+  // Testrechnungen zählen nur im Testbetrieb mit
+  const issued = d.invoices.filter(i => i.status === 'ausgestellt' && (includeTest || !i.test));
   const inP = x => x && x >= period.from && x < period.to;
   // Je Rechnung der im Zeitraum zu versteuernde Anteil: Soll = ganze Rechnung nach Leistungsende,
   // Ist = Zahlungen im Zeitraum, anteilig auf die Steuersätze verteilt (auch Anzahlungen)
