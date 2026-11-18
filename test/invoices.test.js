@@ -221,3 +221,18 @@ test('Logo: PNG mit Transparenz und JPG werden ins PDF eingebettet', async () =>
   assert.match(pdf, /\/Im1 Do/);
   assert.throws(() => loadImage(Buffer.from('GIF89a')), /PNG- oder JPG/);
 });
+
+test('Mietvertrag aus der Rechnung, abweichende Anzahlung mit eigenem Termin', async () => {
+  const { contractPdf, DEFAULT_CONTRACT } = await import('../server/contract.js');
+  const { d, inv } = setup();
+  I.updateDraft(d, inv, { input: { depositAmount: '408', depositDue: '2026-03-01' }, buyer: { phone: '0170 1' } });
+  const sch = I.paymentSchedule(d.invoiceSettings, inv, '2026-02-01');
+  assert.deepEqual(sch.map(p => [p.label, p.amount, p.dueDate]), [['Anzahlung', 408, '2026-03-01'], ['Restzahlung', I.totals(inv.items, inv.deposit).due - 408, '2026-06-13']].map(r => [r[0], Math.round(r[1] * 100) / 100, r[2]]));
+  const C = { ...DEFAULT_CONTRACT(), apartments: { 'Fewo 2': { label: 'OG 4', description: '' } } };
+  const pdf = contractPdf(inv, d.invoiceSettings, C, { today: '2026-02-01' }).toString('latin1');
+  assert.match(pdf, /Mietvertrag/);
+  assert.match(pdf, /Ferienwohnung OG 4 im Kapellenweg/);
+  assert.match(pdf, /Anzahlung: 408,00 \x80 bis sp\xe4testens 01\.03\.2026/);
+  assert.match(pdf, /Sa, 27\.06\.2026, 15:00 Uhr/);
+  assert.match(pdf, /Salvatorische Klausel/);
+});

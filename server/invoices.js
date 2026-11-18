@@ -23,7 +23,7 @@ const num = v => {
 /* ---------- Einstellungen ---------- */
 
 export const DEFAULT_SETTINGS = () => ({
-  seller: { name: '', street: '', zip: '', city: '', country: 'DE', phone: '', email: '', taxNumber: '', vatId: '', iban: '', bic: '', bank: '', accountHolder: '' },
+  seller: { name: '', street: '', zip: '', city: '', country: 'DE', phone: '', mobile: '', email: '', taxNumber: '', vatId: '', iban: '', bic: '', bank: '', accountHolder: '' },
   numberPrefix: 'R', counters: {}, logo: { enabled: false, file: '', name: '' }, paymentDays: 14, vatRate: 7, taxation: 'ist', footer: '',
   payment: { depositPercent: 0, depositDays: 7, depositIfDaysAhead: 30, restDaysBeforeArrival: 14 },
   pricing: { includedPersons: 2, extraAdult: 0, extraChild: 0, childMaxAge: 15, infantMaxAge: 2, cleaning: 0 },
@@ -215,12 +215,16 @@ export function paymentSchedule(S, inv, date) {
   const P = S.payment;
   const ahead = nightsOf(date, inv.from);
   const fullDue = () => { const d = addDays(date, S.paymentDays); return ahead > 0 && d > inv.from ? inv.from : d; };
-  if (inv.input?.plan !== 'full' && P.depositPercent > 0 && P.depositPercent < 100 && ahead > P.depositIfDaysAhead) {
-    const dep = r2(t.due * P.depositPercent / 100);
-    const depDue = addDays(date, P.depositDays);
+  // Abweichende Anzahlung (Betrag und/oder Termin) aus dem Entwurf, z. B. „erst am 20.01. anweisen“
+  const ovAmt = inv.input?.depositAmount > 0 ? Math.min(inv.input.depositAmount, t.due) : 0, ovDue = inv.input?.depositDue || '';
+  const custom = inv.input?.plan !== 'full' && (ovAmt || ovDue);
+  if (custom || (inv.input?.plan !== 'full' && P.depositPercent > 0 && P.depositPercent < 100 && ahead > P.depositIfDaysAhead)) {
+    const dep = ovAmt || (P.depositPercent > 0 ? r2(t.due * P.depositPercent / 100) : t.due);
+    const depDue = ovDue || addDays(date, P.depositDays);
+    if (dep >= t.due - 0.005) return [{ label: 'Gesamtbetrag', amount: t.due, dueDate: depDue }];
     let restDue = addDays(inv.from, -P.restDaysBeforeArrival);
     if (restDue < depDue) restDue = depDue;
-    return [{ label: `Anzahlung (${P.depositPercent} %)`, amount: dep, dueDate: depDue }, { label: 'Restzahlung', amount: r2(t.due - dep), dueDate: restDue }];
+    return [{ label: ovAmt ? 'Anzahlung' : `Anzahlung (${P.depositPercent} %)`, amount: dep, dueDate: depDue }, { label: 'Restzahlung', amount: r2(t.due - dep), dueDate: restDue }];
   }
   return [{ label: 'Gesamtbetrag', amount: t.due, dueDate: fullDue() }];
 }
@@ -290,7 +294,7 @@ export function draftFromStay(d, stay, guest, aptName) {
     adults: Math.max(stay.adults || 0, stay.children ? 0 : persons), childAges: Array(stay.children || 0).fill(10), cleaning: !!S.pricing.cleaning };
   const inv = {
     id: nextId(d.invoices), status: 'entwurf', kind: 'rechnung', number: null, stayId: stay.id, guestId: guest.id,
-    buyer: { name: guest.name, ...splitAddress(guest.address), email: guest.email || '', vatId: '', reference: '' },
+    buyer: { name: guest.name, ...splitAddress(guest.address), email: guest.email || '', phone: guest.phone || '', vatId: '', reference: '' },
     from: stay.start, to: stay.end, aptName, input, items: [], deposit: 0, note: '', eInvoice: false,
     createdAt: new Date().toISOString(),
   };
@@ -301,7 +305,7 @@ export function draftFromStay(d, stay, guest, aptName) {
 
 export function updateDraft(d, inv, b) {
   if (inv.status !== 'entwurf') throw new Error('Diese Rechnung ist festgeschrieben und kann nicht mehr geändert werden. Bitte stornieren.');
-  if (b.buyer) for (const k of ['name', 'street', 'zip', 'city', 'country', 'email', 'vatId', 'reference']) if (b.buyer[k] !== undefined) inv.buyer[k] = s(b.buyer[k], k === 'street' || k === 'name' ? 160 : 100);
+  if (b.buyer) for (const k of ['name', 'street', 'zip', 'city', 'country', 'email', 'phone', 'vatId', 'reference']) if (b.buyer[k] !== undefined) inv.buyer[k] = s(b.buyer[k], k === 'street' || k === 'name' ? 160 : 100);
   if (inv.buyer.country) inv.buyer.country = inv.buyer.country.toUpperCase().slice(0, 2);
   if (b.from !== undefined || b.to !== undefined) {
     const from = b.from ?? inv.from, to = b.to ?? inv.to;
@@ -326,6 +330,8 @@ export function updateDraft(d, inv, b) {
       const kt = computeItems(d.invoiceSettings, d.seasons, inv.input).filter(i => i.kind === 'kurtaxe');
       inv.items = (inv.items || []).filter(i => i.kind !== 'kurtaxe').concat(kt);
     }
+    if (b.input.depositAmount !== undefined) { const v = r2(num(b.input.depositAmount)); if (!(v >= 0 && v < 1e6)) throw new Error('Anzahlung ungültig'); inv.input.depositAmount = v || 0; }
+    if (b.input.depositDue !== undefined) { const v = String(b.input.depositDue || ''); if (v && !isDay(v)) throw new Error('Datum der Anzahlung ungültig'); inv.input.depositDue = v; }
     if (b.input.plan !== undefined) inv.input.plan = b.input.plan === 'full' ? 'full' : 'auto';
   }
   if (b.items) inv.items = cleanItems(b.items);

@@ -771,7 +771,7 @@
       <section class="sec"><h3>Vermieterin (steht auf jeder Rechnung)</h3>
         <p class="d">Änderungen gelten für neue Rechnungen. Festgeschriebene Rechnungen behalten die Angaben von damals.</p>
         <div class="gform">${f('name', 'Name')}${f('street', 'Straße und Hausnummer')}${f('zip', 'PLZ')}${f('city', 'Ort')}
-          ${f('phone', 'Telefon')}${f('email', 'E-Mail')}${f('taxNumber', 'Steuernummer', 'data-sl', sl.taxNumber, false, 'z. B. 61/123/45678')}${f('vatId', 'USt-IdNr. (falls vorhanden)', 'data-sl', sl.vatId, false, 'DE…')}
+          ${f('phone', 'Telefon')}${f('mobile', 'Mobil (für den Mietvertrag)')}${f('email', 'E-Mail')}${f('taxNumber', 'Steuernummer', 'data-sl', sl.taxNumber, false, 'z. B. 61/123/45678')}${f('vatId', 'USt-IdNr. (falls vorhanden)', 'data-sl', sl.vatId, false, 'DE…')}
           ${f('bank', 'Bank')}${f('iban', 'IBAN')}${f('bic', 'BIC')}${f('accountHolder', 'Kontoinhaber')}</div>
       </section>
       <section class="sec"><h3>Logo auf der Rechnung</h3>
@@ -819,7 +819,36 @@
           <span class="small">leer = Hauptsaisons aus ⚙ Einstellungen</span></div>
         <div class="tbl"><table><thead><tr><th>Gruppe</th><th>Alter</th><th>€ Hauptsaison</th><th>€ übrige Zeit</th><th></th></tr></thead><tbody>${kt}</tbody></table></div>
         <div class="row"><button class="mini" type="button" id="ktAdd">+ Altersgruppe</button></div>
-      </section></div>`;
+      </section>
+      ${contractSettings(S)}</div>`;
+  }
+
+  // Mietvertrag: feste Texte, Beschreibung je Wohnung, Klauseln
+  function contractSettings(S) {
+    const C = S.contract || { apartments: {}, clauses: [] };
+    const apts = (data?.apartments || []).filter(a => a.source !== 'own').map(a => a.name);
+    const ta = (attr, val, rows = 3) => `<textarea class="in" ${attr} rows="${rows}" style="width:100%">${esc(val || '')}</textarea>`;
+    return `<section class="sec"><h3>Mietvertrag</h3>
+        <p class="d">Der Mietvertrag wird aus der Rechnung erzeugt (Knopf „📄 Mietvertrag (PDF)“ in jeder Rechnung): Vermieterin, Gast, Wohnung, Personen, Zeitraum, Preise, Zahlungstermine und Bankverbindung werden automatisch eingesetzt. Hier stellst du die festen Texte ein.</p>
+        <div class="gform">
+          <label>Ort für die Unterschrift<input class="in" data-ct="place" value="${esc(C.place)}"></label>
+          <label>Anreise ab (Uhrzeit)<input class="in" data-ct="checkIn" value="${esc(C.checkIn)}"></label>
+          <label>Abreise bis (Uhrzeit)<input class="in" data-ct="checkOut" value="${esc(C.checkOut)}"></label></div>
+        <label class="row" style="flex-direction:column;align-items:stretch">Im Preis enthalten (steht unter den Preisen)${ta('data-ct="included"', C.included)}</label>
+        <label class="row" style="flex-direction:column;align-items:stretch">Hinweis unter den Zahlungsterminen${ta('data-ct="paymentNote"', C.paymentNote)}</label>
+        <h3 style="font-size:1.05em">Mietgegenstand je Wohnung</h3>
+        <p class="small">Satzanfang im Vertrag: „Vermietet wird die Ferienwohnung [Bezeichnung] [Beschreibung]“. Ohne eigene Beschreibung gilt die Standardbeschreibung.</p>
+        <label class="row" style="flex-direction:column;align-items:stretch">Standardbeschreibung${ta('data-ct="defaultDescription"', C.defaultDescription)}</label>
+        ${apts.map(n => { const a = C.apartments[n] || {}; return `<div class="gform" style="align-items:start"><label>${esc(n)}: Bezeichnung im Vertrag<input class="in" data-cta="${esc(n)}|label" value="${esc(a.label || '')}" placeholder="z. B. OG 4"></label>
+          <label class="wide">Beschreibung (leer = Standard)${ta(`data-cta="${esc(n)}|description"`, a.description, 2)}</label></div>`; }).join('')}
+        <h3 style="font-size:1.05em">Weitere Vertragspunkte</h3>
+        <p class="small">Nummeriert ab 5. Steht im Text „[Bankverbindung]“, setzt die App dort Bank, IBAN und BIC ein.</p>
+        ${(C.clauses || []).map((c, i) => `<div class="row" style="flex-direction:column;align-items:stretch;gap:4px">
+          <div class="row" style="margin:0"><b>${i + 5}.</b><input class="in" data-cl="${i}|title" value="${esc(c.title)}" style="max-width:340px">
+            <button class="mini" type="button" data-clup="${i}" ${i ? '' : 'disabled'} aria-label="nach oben">▲</button><button class="mini" type="button" data-cldel="${i}" aria-label="Punkt löschen">✕</button></div>
+          ${ta(`data-cl="${i}|text"`, c.text, 3)}</div>`).join('')}
+        <div class="row"><button class="mini" type="button" id="clAdd">+ Vertragspunkt</button><button class="mini" type="button" id="ctReset">Texte auf Vorlage zurücksetzen</button></div>
+      </section>`;
   }
 
   const mdDe = md => (md ? `${md.slice(3)}.${md.slice(0, 2)}.` : '');
@@ -833,6 +862,7 @@
     const b = I.buyer;
     const head = `<div class="row"><button class="btn" type="button" id="ivBack">◀ Rechnungen</button>${I.guestId ? '<button class="btn" type="button" id="ivGuest">Zum Gast</button>' : ''}
       <a class="btn" href="/export/rechnung/${I.id}.pdf" target="_blank" style="text-decoration:none;color:var(--fg)">${draft ? 'Vorschau PDF' : 'PDF öffnen'}</a>
+      ${I.kind === 'rechnung' ? `<a class="btn" href="/export/mietvertrag/${I.id}.pdf" target="_blank" style="text-decoration:none;color:var(--fg)">📄 Mietvertrag (PDF)</a>` : ''}
       ${!draft && I.files?.xml ? `<a class="btn" href="/export/rechnung/${I.id}.xml" style="text-decoration:none;color:var(--fg)">E-Rechnung (XML)</a>` : ''}</div>`;
     const sums = `<dl class="facts" style="max-width:520px">
       <dt>Gesamt brutto</dt><dd>${euro(T.gross)}</dd>
@@ -875,6 +905,7 @@
           <label>Land (2 Buchstaben)<input class="in" data-b="country" value="${esc(b.country)}"></label>
           <label>E-Mail<input class="in" data-b="email" value="${esc(b.email)}"></label>
           <label>USt-IdNr. des Gastes (nur Firmen)<input class="in" data-b="vatId" value="${esc(b.vatId)}"></label>
+          <label>Telefon (für den Mietvertrag)<input class="in" data-b="phone" value="${esc(b.phone || '')}"></label>
           <label>Referenz / Bestellnummer des Gastes<input class="in" data-b="reference" value="${esc(b.reference)}"></label>
         </div>
       </section>
@@ -900,6 +931,8 @@
       </section>
       <section class="sec"><h3>Festschreiben</h3>
         <label class="row">Zahlungsplan <select class="in" data-in="plan" style="width:auto"><option value="auto">nach Zahlungsbedingungen</option><option value="full" ${I.input.plan === 'full' ? 'selected' : ''}>ganzer Betrag auf einmal</option></select></label>
+        ${I.input.plan === 'full' ? '' : `<div class="row">Abweichende Anzahlung (optional): Betrag (€) <input class="in short" data-in="depositAmount" value="${I.input.depositAmount ? num2(I.input.depositAmount) : ''}" placeholder="z. B. 408" style="width:100px">
+          fällig am <input class="in" type="date" data-in="depositDue" value="${I.input.depositDue || ''}" style="width:auto"><span class="small">z. B. „erst am 20.01. anweisen“. Leer = nach Zahlungsbedingungen.</span></div>`}
         ${schedTbl}${schedule.length ? (ivs.cur.settings.seller.iban && ivs.cur.settings.seller.name ? '<p class="small">Fälligkeiten gerechnet ab heute. Auf der Rechnung steht je Zahlung ein QR-Code (GiroCode) für die Überweisung.</p>' : '<div class="notice warn">Der GiroCode fehlt noch: Bitte unter „Vermieterdaten und Preise“ Name und IBAN eintragen.</div>') : ''}
         <label class="row"><input type="checkbox" id="ivE" ${I.eInvoice ? 'checked' : ''}> Auch als E-Rechnung (XRechnung) ausstellen, z. B. wenn eine Firma das verlangt</label>
         ${missing.length ? `<div class="notice warn">Bitte noch ergänzen: ${missing.map(esc).join(', ')}.</div>` : ''}
@@ -966,6 +999,22 @@
       const groups = () => S.kurtaxe.groups.map(g => ({ ...g }));
       $$('[data-kt]').forEach(i => i.onchange = () => { const [n, k] = i.dataset.kt.split('|'); const g = groups(); g[+n][k] = i.value; save({ kurtaxe: { groups: g } }); });
       $$('[data-ktdel]').forEach(b => b.onclick = () => { const g = groups(); g.splice(+b.dataset.ktdel, 1); save({ kurtaxe: { groups: g } }); });
+      const csave = body => iAct(() => put('/api/admin/contract-settings', body), 'Gespeichert.');
+      const cls = () => (S.contract.clauses || []).map(c => ({ ...c }));
+      $$('[data-ct]').forEach(i => i.onchange = () => csave({ [i.dataset.ct]: i.value }));
+      $$('[data-cta]').forEach(i => i.onchange = () => { const [n, k] = i.dataset.cta.split('|'); csave({ apartments: { [n]: { [k]: i.value } } }); });
+      $$('[data-cl]').forEach(i => i.onchange = () => { const [n, k] = i.dataset.cl.split('|'); const c = cls(); c[+n][k] = i.value; csave({ clauses: c }); });
+      $$('[data-cldel]').forEach(b => b.onclick = () => {
+        if (b.dataset.armed !== '1') { b.dataset.armed = '1'; b.textContent = 'Löschen?'; b.classList.add('danger'); return; }
+        const c = cls(); c.splice(+b.dataset.cldel, 1); csave({ clauses: c });
+      });
+      $$('[data-clup]').forEach(b => b.onclick = () => { const c = cls(), k = +b.dataset.clup; [c[k - 1], c[k]] = [c[k], c[k - 1]]; csave({ clauses: c }); });
+      $('#clAdd').onclick = () => { const c = cls(); c.push({ title: 'Neuer Punkt', text: 'Text' }); csave({ clauses: c }); };
+      $('#ctReset').onclick = () => {
+        const b = $('#ctReset');
+        if (b.dataset.armed !== '1') { b.dataset.armed = '1'; b.textContent = 'Wirklich alle Vertragstexte zurücksetzen?'; b.classList.add('danger'); return; }
+        iAct(() => post('/api/admin/contract-settings/reset'), 'Vertragstexte zurückgesetzt.');
+      };
       $('#ktAdd').onclick = () => { const g = groups(); const last = g[g.length - 1]; g.push({ label: 'Neue Gruppe', ageFrom: last ? Math.min(120, last.ageTo + 1) : 0, ageTo: 120, rate: 0, rateNeben: null }); save({ kurtaxe: { groups: g } }); };
       return;
     }
