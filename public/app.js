@@ -593,7 +593,7 @@
         <td><input class="in" type="date" data-st="${s.id}|end" value="${s.end}" style="width:auto"></td>
         <td>${n}</td>
         <td>${aptSel(`data-st="${s.id}|aptId"`, s.aptId)}</td>
-        <td><input class="in short" data-st="${s.id}|adults" type="number" min="0" value="${s.adults}" title="Erwachsene" style="width:56px"> + <input class="in short" data-st="${s.id}|children" type="number" min="0" value="${s.children}" title="Kinder" style="width:56px"></td>
+        <td style="white-space:nowrap"><input class="in short" data-st="${s.id}|adults" type="number" min="0" value="${s.adults}" title="Erwachsene" style="width:56px"> + <input class="in short" data-st="${s.id}|children" type="number" min="0" value="${s.children}" title="Kinder" style="width:56px"></td>
         <td><input class="in short" data-st="${s.id}|price" value="${s.price == null ? '' : String(s.price).replace('.', ',')}" placeholder="€" style="width:100px"></td>
         <td class="small">${s.price != null && n ? euro(s.price / n) : '–'}</td>
         <td><input class="in" data-st="${s.id}|channel" value="${esc(s.channel)}" style="width:150px"></td>
