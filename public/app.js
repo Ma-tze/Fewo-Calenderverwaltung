@@ -722,7 +722,7 @@
     try {
       if (ivs.page === 'list') ivs.list = await api('/api/admin/invoices');
       if (ivs.page === 'edit') ivs.cur = await api(`/api/admin/invoices/${ivs.id}`);
-      if (ivs.page === 'settings') ivs.set = (await api('/api/admin/invoice-settings')).settings;
+      if (ivs.page === 'settings') { const j = await api('/api/admin/invoice-settings'); ivs.set = j.settings; ivs.ph = j.placeholders || {}; }
     } catch (e) { ivs.page = 'list'; v.innerHTML = `<div class="notice warn">${esc(e.message)}</div>`; return; }
     v.innerHTML = ivs.page === 'edit' ? invEditor() : ivs.page === 'settings' ? invSettings() : invList();
     bindInvoices();
@@ -823,33 +823,39 @@
       ${contractSettings(S)}</div>`;
   }
 
-  // Mietvertrag: feste Texte, Beschreibung je Wohnung, Klauseln
+  // Mietbedingungen (Anhang der Rechnung) und Mietvertrag (Papier): Vorlagen als Abschnittslisten mit Platzhaltern
   function contractSettings(S) {
-    const C = S.contract || { apartments: {}, clauses: [] };
+    const C = S.contract;
     const apts = (data?.apartments || []).filter(a => a.source !== 'own').map(a => a.name);
     const ta = (attr, val, rows = 3) => `<textarea class="in" ${attr} rows="${rows}" style="width:100%">${esc(val || '')}</textarea>`;
-    return `<section class="sec"><h3>Mietvertrag</h3>
-        <p class="d">Normalfall: Die Rechnung geht per E-Mail an den Gast, mit dem Hinweis unten und den Mietbedingungen als zweite Seite. Mit der Anzahlung ist die Buchung bestätigt, eine Unterschrift ist nicht nötig. Für Gäste, die es auf Papier wollen, gibt es in jeder Rechnung den Knopf „📄 Mietvertrag (PDF)“ mit Unterschriftenfeldern und Rechnungsnummer. Beide nutzen die Texte hier.</p>
+    const tab = ivs.termsTab || 'termsInvoice';
+    const list = C[tab] || [];
+    const other = tab === 'termsInvoice' ? 'Mietvertrag' : 'Rechnung';
+    return `<section class="sec"><h3>Mietbedingungen und Mietvertrag</h3>
+        <p class="d">Normalfall: Die Rechnung geht per E-Mail an den Gast, mit dem Hinweis unten und den Mietbedingungen als zweite Seite. Mit der Anzahlung ist die Buchung bestätigt. Für Gäste, die Papier wollen, gibt es in jeder Rechnung „📄 Mietvertrag (PDF)“ mit Unterschriftenfeldern. Beide Vorlagen sind hier frei änderbar. Änderungen gelten für neue Rechnungen; festgeschriebene behalten die Bedingungen von damals.</p>
         <label style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" id="ctTerms" ${C.attachTerms ? 'checked' : ''}> Mietbedingungen an jede Rechnung anhängen und Bestätigungshinweis drucken</label>
-        <label class="row" style="flex-direction:column;align-items:stretch">Bestätigungshinweis auf der Rechnung${ta('data-ct="confirmText"', C.confirmText, 2)}</label>
+        <label class="row" style="flex-direction:column;align-items:stretch">Bestätigungshinweis auf der ersten Rechnungsseite${ta('data-ct="confirmText"', C.confirmText, 2)}</label>
         <div class="gform">
-          <label>Ort für die Unterschrift<input class="in" data-ct="place" value="${esc(C.place)}"></label>
+          <label>Ort für die Unterschrift (Vertrag)<input class="in" data-ct="place" value="${esc(C.place)}"></label>
           <label>Anreise ab (Uhrzeit)<input class="in" data-ct="checkIn" value="${esc(C.checkIn)}"></label>
           <label>Abreise bis (Uhrzeit)<input class="in" data-ct="checkOut" value="${esc(C.checkOut)}"></label></div>
-        <label class="row" style="flex-direction:column;align-items:stretch">Im Preis enthalten (steht unter den Preisen)${ta('data-ct="included"', C.included)}</label>
-        <label class="row" style="flex-direction:column;align-items:stretch">Hinweis unter den Zahlungsterminen${ta('data-ct="paymentNote"', C.paymentNote)}</label>
-        <h3 style="font-size:1.05em">Mietgegenstand je Wohnung</h3>
-        <p class="small">Satzanfang im Vertrag: „Vermietet wird die Ferienwohnung [Bezeichnung] [Beschreibung]“. Ohne eigene Beschreibung gilt die Standardbeschreibung.</p>
+        <h3 style="font-size:1.05em">Wohnungen (Platzhalter [Wohnung])</h3>
         <label class="row" style="flex-direction:column;align-items:stretch">Standardbeschreibung${ta('data-ct="defaultDescription"', C.defaultDescription)}</label>
-        ${apts.map(n => { const a = C.apartments[n] || {}; return `<div class="gform" style="align-items:start"><label>${esc(n)}: Bezeichnung im Vertrag<input class="in" data-cta="${esc(n)}|label" value="${esc(a.label || '')}" placeholder="z. B. OG 4"></label>
+        ${apts.map(n => { const a = C.apartments[n] || {}; return `<div class="gform" style="align-items:start"><label>${esc(n)}: Bezeichnung<input class="in" data-cta="${esc(n)}|label" value="${esc(a.label || '')}" placeholder="z. B. OG 4"></label>
           <label class="wide">Beschreibung (leer = Standard)${ta(`data-cta="${esc(n)}|description"`, a.description, 2)}</label></div>`; }).join('')}
-        <h3 style="font-size:1.05em">Weitere Vertragspunkte</h3>
-        <p class="small">Nummeriert ab 5. Steht im Text „[Bankverbindung]“, setzt die App dort Bank, IBAN und BIC ein.</p>
-        ${(C.clauses || []).map((c, i) => `<div class="row" style="flex-direction:column;align-items:stretch;gap:4px">
-          <div class="row" style="margin:0"><b>${i + 5}.</b><input class="in" data-cl="${i}|title" value="${esc(c.title)}" style="max-width:340px">
-            <button class="mini" type="button" data-clup="${i}" ${i ? '' : 'disabled'} aria-label="nach oben">▲</button><button class="mini" type="button" data-cldel="${i}" aria-label="Punkt löschen">✕</button></div>
-          ${ta(`data-cl="${i}|text"`, c.text, 3)}</div>`).join('')}
-        <div class="row"><button class="mini" type="button" id="clAdd">+ Vertragspunkt</button><button class="mini" type="button" id="ctReset">Texte auf Vorlage zurücksetzen</button></div>
+        <h3 style="font-size:1.05em">Vorlage bearbeiten</h3>
+        <div class="row"><button class="${tab === 'termsInvoice' ? 'btn primary' : 'btn'}" type="button" data-ttab="termsInvoice">Mietbedingungen (Anhang der Rechnung)</button>
+          <button class="${tab === 'termsContract' ? 'btn primary' : 'btn'}" type="button" data-ttab="termsContract">Mietvertrag (Papier)</button>
+          <a class="mini" href="#" id="ctPh">Platzhalter anzeigen</a></div>
+        <div id="ctPhBox" class="notice" style="display:${ivs.phOpen ? 'block' : 'none'}"><b>Platzhalter</b> (werden beim Erzeugen ersetzt; Blöcke allein in eine Zeile schreiben):<br>${Object.entries(ivs.ph || {}).map(([k, v]) => `<code>${esc(k)}</code> ${esc(v)}`).join('<br>')}</div>
+        ${list.map((c, i) => `<div class="row" style="flex-direction:column;align-items:stretch;gap:4px">
+          <div class="row" style="margin:0"><b>${i + 1}.</b><input class="in" data-cl="${i}|title" value="${esc(c.title)}" style="max-width:340px" placeholder="Überschrift">
+            <button class="mini" type="button" data-clup="${i}" ${i ? '' : 'disabled'} aria-label="nach oben">▲</button><button class="mini" type="button" data-cldown="${i}" ${i < list.length - 1 ? '' : 'disabled'} aria-label="nach unten">▼</button><button class="mini" type="button" data-cldel="${i}" aria-label="Abschnitt löschen">✕</button></div>
+          ${ta(`data-cl="${i}|text"`, c.text, Math.min(8, Math.max(2, Math.ceil((c.text || '').length / 130) + (c.text || '').split('\n').length - 1)))}</div>`).join('')}
+        <div class="row"><button class="mini" type="button" id="clAdd">+ Abschnitt</button>
+          <button class="mini" type="button" id="ctCopy">Abschnitte aus der Vorlage „${other}“ übernehmen</button>
+          <button class="mini" type="button" id="ctReset">Diese Vorlage auf Ausgangstext zurücksetzen</button></div>
+        <p class="small">Abschnitte ohne Inhalt (z. B. „Besondere Vereinbarungen“, wenn in der Rechnung nichts eingetragen ist) werden weggelassen, die Nummerierung passt sich an.</p>
       </section>`;
   }
 
@@ -929,6 +935,7 @@
           <label>Erwachsene (Anzahl)<input class="in" data-in="adults" value="${trv.adults}" inputmode="numeric"></label>
           <label>Alter der Kinder, mit Komma getrennt (aus Smoobu vorläufig 10, bitte prüfen)<input class="in" data-in="childAges" value="${esc(trv.childAges.join(', '))}" placeholder="z. B. 12, 4"></label>
           <label style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" data-in="cleaning" ${I.input.cleaning ? 'checked' : ''}> Endreinigung berechnen</label>
+          <label class="wide">Besondere Vereinbarungen für diese Buchung (erscheinen in Mietbedingungen und Mietvertrag)<textarea class="in" data-in="special" rows="2" placeholder="z. B. Hund erlaubt, späte Anreise 20 Uhr vereinbart">${esc(I.input.special || '')}</textarea></label>
           <label style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" data-in="ktExempt" ${I.input.ktExempt ? 'checked' : ''}> Geschäftsreise (keine Kurtaxe)</label>
         </div>
         <div class="row"><button class="btn primary" type="button" id="ivRecalc">Positionen neu berechnen</button><span class="small">Überschreibt die Positionen unten mit den Preisbausteinen.</span></div>
@@ -1011,22 +1018,22 @@
       $$('[data-kt]').forEach(i => i.onchange = () => { const [n, k] = i.dataset.kt.split('|'); const g = groups(); g[+n][k] = i.value; save({ kurtaxe: { groups: g } }); });
       $$('[data-ktdel]').forEach(b => b.onclick = () => { const g = groups(); g.splice(+b.dataset.ktdel, 1); save({ kurtaxe: { groups: g } }); });
       const csave = body => iAct(() => put('/api/admin/contract-settings', body), 'Gespeichert.');
-      const cls = () => (S.contract.clauses || []).map(c => ({ ...c }));
+      const tab = ivs.termsTab || 'termsInvoice';
+      const cls = () => (S.contract[tab] || []).map(c => ({ ...c }));
+      const lsave = c => csave({ [tab]: c });
+      const arm = (b, label, fn) => { if (b.dataset.armed !== '1') { b.dataset.armed = '1'; b.textContent = label; b.classList.add('danger'); return; } fn(); };
       $$('[data-ct]').forEach(i => i.onchange = () => csave({ [i.dataset.ct]: i.value }));
       $('#ctTerms').onchange = e => csave({ attachTerms: e.target.checked });
       $$('[data-cta]').forEach(i => i.onchange = () => { const [n, k] = i.dataset.cta.split('|'); csave({ apartments: { [n]: { [k]: i.value } } }); });
-      $$('[data-cl]').forEach(i => i.onchange = () => { const [n, k] = i.dataset.cl.split('|'); const c = cls(); c[+n][k] = i.value; csave({ clauses: c }); });
-      $$('[data-cldel]').forEach(b => b.onclick = () => {
-        if (b.dataset.armed !== '1') { b.dataset.armed = '1'; b.textContent = 'Löschen?'; b.classList.add('danger'); return; }
-        const c = cls(); c.splice(+b.dataset.cldel, 1); csave({ clauses: c });
-      });
-      $$('[data-clup]').forEach(b => b.onclick = () => { const c = cls(), k = +b.dataset.clup; [c[k - 1], c[k]] = [c[k], c[k - 1]]; csave({ clauses: c }); });
-      $('#clAdd').onclick = () => { const c = cls(); c.push({ title: 'Neuer Punkt', text: 'Text' }); csave({ clauses: c }); };
-      $('#ctReset').onclick = () => {
-        const b = $('#ctReset');
-        if (b.dataset.armed !== '1') { b.dataset.armed = '1'; b.textContent = 'Wirklich alle Vertragstexte zurücksetzen?'; b.classList.add('danger'); return; }
-        iAct(() => post('/api/admin/contract-settings/reset'), 'Vertragstexte zurückgesetzt.');
-      };
+      $$('[data-ttab]').forEach(b => b.onclick = () => { ivs.termsTab = b.dataset.ttab; renderInvoices(); });
+      $('#ctPh').onclick = e => { e.preventDefault(); ivs.phOpen = !ivs.phOpen; $('#ctPhBox').style.display = ivs.phOpen ? 'block' : 'none'; };
+      $$('[data-cl]').forEach(i => i.onchange = () => { const [n, k] = i.dataset.cl.split('|'); const c = cls(); c[+n][k] = i.value; lsave(c); });
+      $$('[data-cldel]').forEach(b => b.onclick = () => arm(b, 'Löschen?', () => { const c = cls(); c.splice(+b.dataset.cldel, 1); lsave(c); }));
+      $$('[data-clup]').forEach(b => b.onclick = () => { const c = cls(), k = +b.dataset.clup; [c[k - 1], c[k]] = [c[k], c[k - 1]]; lsave(c); });
+      $$('[data-cldown]').forEach(b => b.onclick = () => { const c = cls(), k = +b.dataset.cldown; [c[k + 1], c[k]] = [c[k], c[k + 1]]; lsave(c); });
+      $('#clAdd').onclick = () => { const c = cls(); c.push({ title: 'Neuer Abschnitt', text: 'Text' }); lsave(c); };
+      $('#ctCopy').onclick = () => arm($('#ctCopy'), 'Wirklich diese Vorlage durch die andere ersetzen?', () => iAct(() => post('/api/admin/contract-settings/reset', { which: tab, from: 'other' }), 'Übernommen.'));
+      $('#ctReset').onclick = () => arm($('#ctReset'), 'Wirklich auf den Ausgangstext zurücksetzen?', () => iAct(() => post('/api/admin/contract-settings/reset', { which: tab }), 'Zurückgesetzt.'));
       $('#ktAdd').onclick = () => { const g = groups(); const last = g[g.length - 1]; g.push({ label: 'Neue Gruppe', ageFrom: last ? Math.min(120, last.ageTo + 1) : 0, ageTo: 120, rate: 0, rateNeben: null }); save({ kurtaxe: { groups: g } }); };
       return;
     }

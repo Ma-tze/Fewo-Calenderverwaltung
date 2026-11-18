@@ -332,6 +332,7 @@ export function updateDraft(d, inv, b) {
     }
     if (b.input.depositAmount !== undefined) { const v = r2(num(b.input.depositAmount)); if (!(v >= 0 && v < 1e6)) throw new Error('Anzahlung ungültig'); inv.input.depositAmount = v || 0; }
     if (b.input.depositDue !== undefined) { const v = String(b.input.depositDue || ''); if (v && !isDay(v)) throw new Error('Datum der Anzahlung ungültig'); inv.input.depositDue = v; }
+    if (b.input.special !== undefined) inv.input.special = s(b.input.special, 2000);
     if (b.input.plan !== undefined) inv.input.plan = b.input.plan === 'full' ? 'full' : 'auto';
   }
   if (b.items) inv.items = cleanItems(b.items);
