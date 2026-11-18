@@ -12,7 +12,7 @@ function setup() {
   }, d.invoiceSettings);
   const inv = I.draftFromStay(d, { id: 1, start: '2026-06-27', end: '2026-07-04', price: 693, adults: 3, children: 2 },
     { id: 1, name: 'Familie Weber', address: 'Lindenweg 3, 70173 Stuttgart', email: 'w@example.org' }, 'Fewo 2');
-  I.updateDraft(d, inv, { input: { ages: '45, 43, 19, 12, 4' }, deposit: '200' });
+  I.updateDraft(d, inv, { input: { adults: 3, childAges: '12, 4' }, deposit: '200' });
   I.recompute(d, inv);
   return { d, inv };
 }
@@ -140,7 +140,7 @@ test('Kurtaxe Immenstaad: feste Hauptsaison, Kinder bis 14 frei, Befreiung Gesch
   const S = d.invoiceSettings;
   const kt = items => items.filter(i => i.kind === 'kurtaxe').map(i => [i.qty, i.price]);
   // 29.10. bis 03.11.: 3 Nächte Hauptsaison (29., 30., 31.10.), 2 Nächte übrige Zeit
-  const base = { from: '2026-10-29', to: '2026-11-03', perNight: 100, ages: [45, 15, 14, 3] };
+  const base = { from: '2026-10-29', to: '2026-11-03', perNight: 100, adults: 1, childAges: [15, 14, 3] };
   assert.deepEqual(kt(INV.computeItems(S, [], base)), [[6, 3.5], [4, 2.2]]);
   assert.deepEqual(kt(INV.computeItems(S, [], { ...base, ktExempt: 'Geschäftsreise' })), []);
   // alte Vorbelegung mit lauter 0-Sätzen wird ersetzt, eingetragene Sätze bleiben
@@ -162,4 +162,16 @@ test('Haken Geschäftsreise entfernt nur die Kurtaxe und steht auf der Rechnung'
   assert.equal(inv.items.length, n - 4);
   I.updateDraft(d, inv, { input: { ktExempt: false } });
   assert.equal(inv.items.filter(i => i.kind === 'kurtaxe').length, 4);
+});
+
+test('Erwachsene nur als Anzahl, Kinder mit Alter; alte Entwürfe mit Altersliste werden übernommen', () => {
+  const { d, inv } = setup();
+  assert.equal(inv.input.adults, 3); assert.deepEqual(inv.input.childAges, [12, 4]);
+  const old = { ...inv, id: 99, input: { ...inv.input, adults: undefined, childAges: undefined, ages: [50, 48, 16, 8] } };
+  delete old.input.adults; delete old.input.childAges;
+  assert.deepEqual(I.travellerAges(old.input), [50, 48, 16, 8]);
+  I.updateDraft(d, old, { input: { adults: 2 } });
+  assert.deepEqual([old.input.adults, old.input.childAges, old.input.ages], [2, [16, 8], undefined]);
+  const fresh = I.draftFromStay(d, { id: 5, start: '2026-08-01', end: '2026-08-05', price: 400, adults: 2, children: 1 }, { id: 1, name: 'X' }, 'Fewo 3');
+  assert.deepEqual([fresh.input.adults, fresh.input.childAges], [2, [10]]);
 });

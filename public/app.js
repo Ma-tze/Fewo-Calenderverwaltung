@@ -817,6 +817,8 @@
     const { invoice: I, totals: T, missing, schedule, payments, open } = ivs.cur;
     const schedTbl = schedule.length ? `<div class="tbl"><table style="min-width:0"><thead><tr><th>Zahlung</th><th style="text-align:right">Betrag</th><th>fällig bis</th></tr></thead><tbody>${schedule.map(p => `<tr><td>${esc(p.label)}</td><td style="text-align:right">${euro(p.amount)}</td><td>${dmy(p.dueDate)}</td></tr>`).join('')}</tbody></table></div>` : '';
     const draft = I.status === 'entwurf';
+    const trv = I.input.adults != null ? { adults: I.input.adults, childAges: I.input.childAges || [] }
+      : { adults: (I.input.ages || []).filter(x => x > 17).length, childAges: (I.input.ages || []).filter(x => x <= 17) };
     const b = I.buyer;
     const head = `<div class="row"><button class="btn" type="button" id="ivBack">◀ Rechnungen</button>${I.guestId ? '<button class="btn" type="button" id="ivGuest">Zum Gast</button>' : ''}
       <a class="btn" href="/export/rechnung/${I.id}.pdf" target="_blank" style="text-decoration:none;color:var(--fg)">${draft ? 'Vorschau PDF' : 'PDF öffnen'}</a>
@@ -868,7 +870,8 @@
           <label>Abreise<input class="in" type="date" data-p="to" value="${I.to}"></label>
           <label>Wohnung<input class="in" data-p="aptName" value="${esc(I.aptName)}"></label>
           <label>Grundpreis je Nacht (€, brutto)<input class="in" data-in="perNight" value="${num2(I.input.perNight)}"></label>
-          <label class="wide">Alter aller Reisenden, mit Komma getrennt (für Mehrbelegung und Kurtaxe)<input class="in" data-in="ages" value="${esc((I.input.ages || []).join(', '))}" placeholder="z. B. 45, 43, 12, 4"></label>
+          <label>Erwachsene (Anzahl)<input class="in" data-in="adults" value="${trv.adults}" inputmode="numeric"></label>
+          <label>Alter der Kinder, mit Komma getrennt (aus Smoobu vorläufig 10, bitte prüfen)<input class="in" data-in="childAges" value="${esc(trv.childAges.join(', '))}" placeholder="z. B. 12, 4"></label>
           <label style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" data-in="cleaning" ${I.input.cleaning ? 'checked' : ''}> Endreinigung berechnen</label>
           <label style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" data-in="ktExempt" ${I.input.ktExempt ? 'checked' : ''}> Geschäftsreise (keine Kurtaxe)</label>
         </div>

@@ -120,13 +120,20 @@ function seasonNights(seasons, from, to, K = {}) {
 
 /**
  * Positionen aus den Eingaben berechnen.
- * input: { from, to, aptName, perNight, ages: [Zahlen], cleaning: bool }
+ * input: { from, to, aptName, perNight, adults: Anzahl, childAges: [Zahlen], cleaning: bool, ktExempt }
+ * (ältere Entwürfe haben statt adults/childAges eine Liste ages mit allen Altersangaben)
  */
+// Erwachsene ohne Altersangabe zählen als volljährig, Kinder mit ihrem Alter
+export function travellerAges(input) {
+  const list = input.adults != null ? [...Array(Math.max(0, Math.trunc(num(input.adults)) || 0)).fill(40), ...(input.childAges || [])] : (input.ages || []);
+  return list.map(a => Math.trunc(num(a))).filter(a => a >= 0 && a <= 120);
+}
+
 export function computeItems(settings, seasons, input) {
   const { pricing: P, kurtaxe: K, vatRate } = settings;
   const n = nightsOf(input.from, input.to);
   if (!(n > 0)) throw new Error('Bitte Anreise und Abreise prüfen.');
-  const ages = (input.ages || []).map(a => Math.trunc(num(a))).filter(a => a >= 0 && a <= 120);
+  const ages = travellerAges(input);
   const items = [];
   const per = r2(num(input.perNight));
   items.push({ text: `Übernachtung ${input.aptName || ''}`.trim() + `, ${de(input.from)} bis ${de(input.to)}`, qty: n, unit: 'Nacht', price: per, vat: vatRate, kind: 'stay' });
@@ -267,8 +274,9 @@ export function draftFromStay(d, stay, guest, aptName) {
   const S = d.invoiceSettings;
   const n = nightsOf(stay.start, stay.end);
   const persons = (stay.adults || 0) + (stay.children || 0) || 2;
-  const ages = [...Array(Math.max(stay.adults || 0, stay.children ? 0 : persons)).fill(40), ...Array(stay.children || 0).fill(10)];
-  const input = { from: stay.start, to: stay.end, aptName, perNight: stay.price != null && n ? r2(stay.price / n) : 0, ages, cleaning: !!S.pricing.cleaning };
+  // Smoobu kennt nur die Anzahl der Kinder; ihr Alter (vorbelegt mit 10) bitte im Entwurf eintragen
+  const input = { from: stay.start, to: stay.end, aptName, perNight: stay.price != null && n ? r2(stay.price / n) : 0,
+    adults: Math.max(stay.adults || 0, stay.children ? 0 : persons), childAges: Array(stay.children || 0).fill(10), cleaning: !!S.pricing.cleaning };
   const inv = {
     id: nextId(d.invoices), status: 'entwurf', kind: 'rechnung', number: null, stayId: stay.id, guestId: guest.id,
     buyer: { name: guest.name, ...splitAddress(guest.address), email: guest.email || '', vatId: '', reference: '' },
@@ -292,6 +300,13 @@ export function updateDraft(d, inv, b) {
   if (b.aptName !== undefined) inv.aptName = inv.input.aptName = s(b.aptName, 60);
   if (b.input) {
     if (b.input.perNight !== undefined) inv.input.perNight = r2(num(b.input.perNight));
+    const ageList = v => (Array.isArray(v) ? v : String(v).split(/[,;\s]+/)).filter(x => x !== '').map(x => Math.trunc(num(x))).filter(a => a >= 0 && a <= 120).slice(0, 20);
+    if (b.input.adults !== undefined || b.input.childAges !== undefined) {
+      if (inv.input.adults == null) { const old = travellerAges(inv.input); inv.input.adults = old.filter(a => a > 17).length; inv.input.childAges = old.filter(a => a <= 17); }
+      if (b.input.adults !== undefined) { const v = Math.trunc(num(b.input.adults)); if (!(v >= 0 && v <= 20)) throw new Error('Anzahl Erwachsene ungültig'); inv.input.adults = v; }
+      if (b.input.childAges !== undefined) inv.input.childAges = ageList(b.input.childAges);
+      delete inv.input.ages;
+    }
     if (b.input.ages !== undefined) inv.input.ages = (Array.isArray(b.input.ages) ? b.input.ages : String(b.input.ages).split(/[,;\s]+/)).filter(x => x !== '').map(x => Math.trunc(num(x))).filter(a => a >= 0 && a <= 120).slice(0, 20);
     if (b.input.cleaning !== undefined) inv.input.cleaning = !!b.input.cleaning;
     if (b.input.ktExempt !== undefined) {
