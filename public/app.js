@@ -194,7 +194,7 @@
   function render() {
     renderTop();
     const set = state.view === 'settings';
-    ['#toolbar', '#summary', '#legend', '#dock'].forEach(s => { $(s).hidden = set; });
+    ['#toolbar', '#summary', '#legend', '#dock', '#arrows'].forEach(s => { $(s).hidden = set; });
     $('#setBtn').textContent = set ? '◀ Zurück zum Kalender' : '⚙ Einstellungen';
     const v = $('#view');
     if (set) return renderSettings();

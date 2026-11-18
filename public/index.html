@@ -31,24 +31,26 @@
 
   <div id="banner" class="notice" hidden></div>
 
-  <div class="toolbar" id="toolbar">
-    <h2 id="rangeTitle"></h2>
-    <div class="arrows">
-      <button class="btn" id="prevBtn" type="button">◀ früher</button>
-      <button class="btn" id="nextBtn" type="button">später ▶</button>
-    </div>
-  </div>
-
-  <div class="summary" id="summary"></div>
-  <main id="view"></main>
-  <div class="legend" id="legend"></div>
-
   <nav class="dock" id="dock" aria-label="Ansicht wählen">
     <button type="button" data-nav="today">Heute</button>
     <button type="button" data-nav="w4">4 Wochen</button>
     <button type="button" data-nav="m3">3 Monate</button>
     <button type="button" data-nav="year">Jahr</button>
   </nav>
+
+  <div class="toolbar" id="toolbar">
+    <h2 id="rangeTitle"></h2>
+  </div>
+
+  <div class="summary" id="summary"></div>
+  <main id="view"></main>
+  <div class="legend" id="legend"></div>
+
+  <nav class="arrows" id="arrows" aria-label="Blättern">
+    <button class="btn" id="prevBtn" type="button">◀ früher</button>
+    <button class="btn" id="nextBtn" type="button">später ▶</button>
+  </nav>
+
 </div>
 <div id="overlayRoot"></div>
 <div id="toastRoot"></div>
