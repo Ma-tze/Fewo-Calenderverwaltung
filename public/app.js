@@ -801,7 +801,7 @@
         <p class="small">Die im Grundpreis enthaltenen Plätze werden zuerst mit Erwachsenen belegt. Alle weiteren Personen kosten den Mehrbelegungspreis.</p>
       </section>
       <section class="sec"><h3>Kurtaxe (ohne Umsatzsteuer)</h3>
-        <p class="d">Sätze je Person und Aufenthaltstag nach Alter (gezählt wird je Nacht, An- und Abreisetag zusammen als ein Tag). Vorbelegt nach der Kurtaxesatzung Immenstaad ab 01.01.2026: ab 15 Jahre 3,50 € (01.04. bis 31.10.) und 2,20 € (übrige Zeit), Kinder bis 14 Jahre frei. Geschäftsreisende und Familienbesuche befreist du direkt in der Rechnung.</p>
+        <p class="d">Sätze je Person und Aufenthaltstag nach Alter (gezählt wird je Nacht, An- und Abreisetag zusammen als ein Tag). Vorbelegt nach der Kurtaxesatzung Immenstaad ab 01.01.2026: ab 15 Jahre 3,50 € (01.04. bis 31.10.) und 2,20 € (übrige Zeit), Kinder bis 14 Jahre frei. Geschäftsreisende befreist du mit dem Haken „Geschäftsreise“ in der Rechnung.</p>
         <div class="row"><label>Bezeichnung auf der Rechnung <input class="in" id="ktLabel" value="${esc(S.kurtaxe.label)}" style="width:200px"></label>
           <label>Hauptsaison vom <input class="in short" data-ktm="mainFrom" value="${mdDe(S.kurtaxe.mainFrom)}" placeholder="TT.MM." style="width:80px"></label>
           <label>bis <input class="in short" data-ktm="mainTo" value="${mdDe(S.kurtaxe.mainTo)}" placeholder="TT.MM." style="width:80px"></label>
@@ -870,7 +870,7 @@
           <label>Grundpreis je Nacht (€, brutto)<input class="in" data-in="perNight" value="${num2(I.input.perNight)}"></label>
           <label class="wide">Alter aller Reisenden, mit Komma getrennt (für Mehrbelegung und Kurtaxe)<input class="in" data-in="ages" value="${esc((I.input.ages || []).join(', '))}" placeholder="z. B. 45, 43, 12, 4"></label>
           <label style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" data-in="cleaning" ${I.input.cleaning ? 'checked' : ''}> Endreinigung berechnen</label>
-          <label>Kurtaxe<select class="in" data-in="ktExempt">${[['', 'nach Alter berechnen'], ['Geschäftsreise', 'befreit: Geschäftsreise'], ['Familienbesuch', 'befreit: unentgeltlicher Familienbesuch']].map(([k, t]) => `<option value="${k}" ${(I.input.ktExempt || '') === k ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
+          <label style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" data-in="ktExempt" ${I.input.ktExempt ? 'checked' : ''}> Geschäftsreise (keine Kurtaxe)</label>
         </div>
         <div class="row"><button class="btn primary" type="button" id="ivRecalc">Positionen neu berechnen</button><span class="small">Überschreibt die Positionen unten mit den Preisbausteinen.</span></div>
       </section>

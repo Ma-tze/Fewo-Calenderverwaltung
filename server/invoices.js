@@ -295,7 +295,7 @@ export function updateDraft(d, inv, b) {
     if (b.input.ages !== undefined) inv.input.ages = (Array.isArray(b.input.ages) ? b.input.ages : String(b.input.ages).split(/[,;\s]+/)).filter(x => x !== '').map(x => Math.trunc(num(x))).filter(a => a >= 0 && a <= 120).slice(0, 20);
     if (b.input.cleaning !== undefined) inv.input.cleaning = !!b.input.cleaning;
     if (b.input.ktExempt !== undefined) {
-      inv.input.ktExempt = KT_EXEMPT.includes(b.input.ktExempt) ? b.input.ktExempt : '';
+      inv.input.ktExempt = b.input.ktExempt === true ? 'Geschäftsreise' : KT_EXEMPT.includes(b.input.ktExempt) ? b.input.ktExempt : '';
       // nur die Kurtaxe-Positionen neu setzen, Handänderungen an anderen Positionen bleiben
       const kt = computeItems(d.invoiceSettings, d.seasons, inv.input).filter(i => i.kind === 'kurtaxe');
       inv.items = (inv.items || []).filter(i => i.kind !== 'kurtaxe').concat(kt);
@@ -483,6 +483,7 @@ export function invoicePdf(inv, { draftSettings = null, xml = null } = {}) {
     }
     texts.push(`Bitte überweisen Sie ${sched.length > 1 ? 'die Beträge' : 'den Betrag'} zu den genannten Terminen auf das unten genannte Konto. Verwendungszweck: ${ref}.`);
   }
+  if (inv.input?.ktExempt === 'Geschäftsreise') texts.push('Geschäftsreise: von der Kurtaxe befreit.');
   if (inv.note) texts.push(inv.note);
   if (inv.buyer.vatId) texts.push(`USt-IdNr. des Leistungsempfängers: ${inv.buyer.vatId}`);
   if (xml) texts.push('Diese Rechnung enthält eine E-Rechnung (XRechnung) als eingebettete Datei.');

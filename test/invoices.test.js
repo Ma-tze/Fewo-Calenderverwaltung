@@ -152,3 +152,14 @@ test('Kurtaxe Immenstaad: feste Hauptsaison, Kinder bis 14 frei, Befreiung Gesch
   assert.equal(mine.invoiceSettings.kurtaxe.groups[0].rate, 2);
   assert.equal(INV.cleanSettings({ kurtaxe: { mainFrom: '1.5.' } }, S).kurtaxe.mainFrom, '05-01');
 });
+
+test('Haken Geschäftsreise entfernt nur die Kurtaxe und steht auf der Rechnung', () => {
+  const { d, inv } = setup();
+  const n = inv.items.length;
+  I.updateDraft(d, inv, { input: { ktExempt: true } });
+  assert.equal(inv.input.ktExempt, 'Geschäftsreise');
+  assert.equal(inv.items.filter(i => i.kind === 'kurtaxe').length, 0);
+  assert.equal(inv.items.length, n - 4);
+  I.updateDraft(d, inv, { input: { ktExempt: false } });
+  assert.equal(inv.items.filter(i => i.kind === 'kurtaxe').length, 4);
+});
