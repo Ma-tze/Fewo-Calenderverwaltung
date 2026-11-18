@@ -35,7 +35,7 @@ Danach:
 
 ### Monat als PDF
 
-In der PC-Ansicht oben den Monat wählen und auf **🖨 Monat als PDF** klicken. Das PDF (A4 quer) zeigt das Monatsraster aller Wohnungen mit Ferien und Saison, darunter alle Buchungen mit Kontaktdaten. Unter jedem Balken, in der Spalte „Ergänzungen“ und im Notizbereich unten ist Platz für Handschriftliches. **Aushang** erzeugt dasselbe ohne Telefon und E-Mail. Direkter Link: `/export/monat.pdf?m=2026-12` (mit `&kontakt=0` für den Aushang).
+In der PC-Ansicht oben den Monat wählen und auf **🖨 Monat als PDF** klicken. Das PDF (A4 quer) zeigt das Monatsraster aller Wohnungen mit Ferien und Saison, darunter alle Buchungen mit Kontaktdaten. Unter jedem Balken, in der Spalte „Ergänzungen“ und im Notizbereich unten ist Platz für Handschriftliches. Direkter Link: `/export/monat.pdf?m=2026-12`.
 
 ### Smoobu-API einrichten
 
