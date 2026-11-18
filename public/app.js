@@ -829,7 +829,9 @@
     const apts = (data?.apartments || []).filter(a => a.source !== 'own').map(a => a.name);
     const ta = (attr, val, rows = 3) => `<textarea class="in" ${attr} rows="${rows}" style="width:100%">${esc(val || '')}</textarea>`;
     return `<section class="sec"><h3>Mietvertrag</h3>
-        <p class="d">Der Mietvertrag wird aus der Rechnung erzeugt (Knopf „📄 Mietvertrag (PDF)“ in jeder Rechnung): Vermieterin, Gast, Wohnung, Personen, Zeitraum, Preise, Zahlungstermine und Bankverbindung werden automatisch eingesetzt. Hier stellst du die festen Texte ein.</p>
+        <p class="d">Normalfall: Die Rechnung geht per E-Mail an den Gast, mit dem Hinweis unten und den Mietbedingungen als zweite Seite. Mit der Anzahlung ist die Buchung bestätigt, eine Unterschrift ist nicht nötig. Für Gäste, die es auf Papier wollen, gibt es in jeder Rechnung den Knopf „📄 Mietvertrag (PDF)“ mit Unterschriftenfeldern und Rechnungsnummer. Beide nutzen die Texte hier.</p>
+        <label style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" id="ctTerms" ${C.attachTerms ? 'checked' : ''}> Mietbedingungen an jede Rechnung anhängen und Bestätigungshinweis drucken</label>
+        <label class="row" style="flex-direction:column;align-items:stretch">Bestätigungshinweis auf der Rechnung${ta('data-ct="confirmText"', C.confirmText, 2)}</label>
         <div class="gform">
           <label>Ort für die Unterschrift<input class="in" data-ct="place" value="${esc(C.place)}"></label>
           <label>Anreise ab (Uhrzeit)<input class="in" data-ct="checkIn" value="${esc(C.checkIn)}"></label>
@@ -851,6 +853,14 @@
       </section>`;
   }
 
+  // E-Mail-Entwurf im Mailprogramm öffnen; die Rechnung (PDF) hängt man dort selbst an
+  function mailLink(I, schedule) {
+    const sl = I.seller || {};
+    const pay = (schedule || []).map(p => `- ${p.label}: ${euro(p.amount)} bis ${dmy(p.dueDate)}`).join('\n');
+    const body = `Guten Tag ${I.buyer.name},\n\nvielen Dank für Ihre Buchung${I.aptName ? ` (${I.aptName})` : ''} vom ${dmy(I.from)} bis ${dmy(I.to)}. Anbei erhalten Sie die Rechnung ${I.number} mit unseren Mietbedingungen.\n\n${pay ? `Bitte überweisen Sie:\n${pay}\n\nAuf der Rechnung finden Sie für jede Zahlung einen QR-Code für Ihre Banking-App.\n\n` : ''}Mit Ihrer Anzahlung bzw. Zahlung ist die Buchung verbindlich bestätigt und die Mietbedingungen sind anerkannt. Einen unterschriebenen Mietvertrag brauchen wir nicht; gern schicken wir Ihnen aber einen zu.\n\nWir freuen uns auf Ihren Besuch!\n\nViele Grüße\n${sl.name || ''}${sl.phone ? `\nTel. ${sl.phone}` : ''}`;
+    return `mailto:${encodeURIComponent(I.buyer.email)}?subject=${encodeURIComponent(`Ihre Buchung ${dmy(I.from)} bis ${dmy(I.to)}, Rechnung ${I.number}`)}&body=${encodeURIComponent(body)}`;
+  }
+
   const mdDe = md => (md ? `${md.slice(3)}.${md.slice(0, 2)}.` : '');
 
   function invEditor() {
@@ -863,6 +873,7 @@
     const head = `<div class="row"><button class="btn" type="button" id="ivBack">◀ Rechnungen</button>${I.guestId ? '<button class="btn" type="button" id="ivGuest">Zum Gast</button>' : ''}
       <a class="btn" href="/export/rechnung/${I.id}.pdf" target="_blank" style="text-decoration:none;color:var(--fg)">${draft ? 'Vorschau PDF' : 'PDF öffnen'}</a>
       ${I.kind === 'rechnung' ? `<a class="btn" href="/export/mietvertrag/${I.id}.pdf" target="_blank" style="text-decoration:none;color:var(--fg)">📄 Mietvertrag (PDF)</a>` : ''}
+      ${!draft && I.kind === 'rechnung' && b.email ? `<a class="btn" href="${mailLink(I, schedule)}" style="text-decoration:none;color:var(--fg)">✉ E-Mail an Gast</a>` : ''}
       ${!draft && I.files?.xml ? `<a class="btn" href="/export/rechnung/${I.id}.xml" style="text-decoration:none;color:var(--fg)">E-Rechnung (XML)</a>` : ''}</div>`;
     const sums = `<dl class="facts" style="max-width:520px">
       <dt>Gesamt brutto</dt><dd>${euro(T.gross)}</dd>
@@ -1002,6 +1013,7 @@
       const csave = body => iAct(() => put('/api/admin/contract-settings', body), 'Gespeichert.');
       const cls = () => (S.contract.clauses || []).map(c => ({ ...c }));
       $$('[data-ct]').forEach(i => i.onchange = () => csave({ [i.dataset.ct]: i.value }));
+      $('#ctTerms').onchange = e => csave({ attachTerms: e.target.checked });
       $$('[data-cta]').forEach(i => i.onchange = () => { const [n, k] = i.dataset.cta.split('|'); csave({ apartments: { [n]: { [k]: i.value } } }); });
       $$('[data-cl]').forEach(i => i.onchange = () => { const [n, k] = i.dataset.cl.split('|'); const c = cls(); c[+n][k] = i.value; csave({ clauses: c }); });
       $$('[data-cldel]').forEach(b => b.onclick = () => {

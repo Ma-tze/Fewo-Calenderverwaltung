@@ -13,6 +13,8 @@ export const BANK_MARK = '[Bankverbindung]';
 
 export const DEFAULT_CONTRACT = () => ({
   place: 'Immenstaad',
+  attachTerms: true,
+  confirmText: 'Mit Ihrer Anzahlung bzw. Zahlung bestätigen Sie die Buchung und erkennen die beigefügten Mietbedingungen an.',
   checkIn: '15:00', checkOut: '10:00',
   included: 'Der Preis ist inklusive Endreinigung, Bettwäsche und 2 Satz Handtücher/Woche. Dem Mieter werden 1 oder 2 Kombischlüssel mit Zugang zu Haus und Wohnung übergeben.',
   paymentNote: 'Der Vermieter behält sich vor, im Falle nicht rechtzeitiger Zahlungen vom Mietvertrag zurückzutreten. Der Vermieter ist dann berechtigt, eine Entschädigung geltend zu machen.',
@@ -37,7 +39,8 @@ export function cleanContract(b, prev) {
   const out = structuredClone(prev);
   for (const k of ['place']) if (b[k] !== undefined) out[k] = t(b[k], 60);
   for (const k of ['checkIn', 'checkOut']) if (b[k] !== undefined) { const v = t(b[k], 5); if (!timeOk(v)) throw new Error('Uhrzeit bitte als HH:MM eingeben'); out[k] = v; }
-  for (const k of ['included', 'paymentNote', 'defaultDescription']) if (b[k] !== undefined) out[k] = t(b[k], 2000);
+  if (b.attachTerms !== undefined) out.attachTerms = !!b.attachTerms;
+  for (const k of ['included', 'paymentNote', 'defaultDescription', 'confirmText']) if (b[k] !== undefined) out[k] = t(b[k], 2000);
   if (b.apartments) for (const [name, v] of Object.entries(b.apartments)) {
     const cur = out.apartments[name] || { label: '', description: '' };
     if (v.label !== undefined) cur.label = t(v.label, 60);
@@ -59,6 +62,41 @@ function wrap(text, width, size) {
     out.push(line);
   }
   return out;
+}
+
+/**
+ * Mietbedingungen als zusätzliche Seite(n) an die Rechnung anhängen (Bestätigung durch Anzahlung statt Unterschrift).
+ * Preise, Personen und Zahlungstermine stehen schon auf der Rechnung; hier stehen Mietobjekt, Zeiten und die Klauseln.
+ */
+export function appendTerms(doc, inv, S, C) {
+  const sl = inv.status === 'entwurf' ? S.seller : inv.seller;
+  const L = 56, R = 539, W = R - L;
+  doc.newPage();
+  let y = 70;
+  const need = h => { if (y + h > 745) { doc.newPage(); y = 60; } };
+  const para = (text, { size = 8.5, bold = false } = {}) => { for (const l of wrap(text, W, size)) { need(size + 4); doc.text(L, y, l, { size, bold }); y += size + 2.6; } };
+  let no = 0;
+  const head = title => { y += 5; need(34); no++; doc.text(L, y, `${no}. ${title}`, { size: 9.5, bold: true }); y += 12.5; };
+  doc.text(L, y, 'Mietbedingungen', { size: 16, bold: true }); y += 16;
+  doc.text(L, y, `zur Rechnung ${inv.number || '(Entwurf)'} · ${inv.buyer.name} · ${de(inv.from)} bis ${de(inv.to)}`, { size: 8.5, color: '#5f6863' }); y += 10;
+  const apt = C.apartments?.[inv.aptName] || {};
+  head('Mietgegenstand');
+  para(`Vermietet wird die Ferienwohnung ${apt.label || inv.aptName || ''} ${apt.description || C.defaultDescription}`.replace(/\s+/g, ' '));
+  head('Mietdauer');
+  para(`vom ${deWd(inv.from)}, ${C.checkIn} Uhr, bis zum ${deWd(inv.to)}, ${C.checkOut} Uhr.`);
+  if (C.included) { head('Leistungen'); para(C.included); }
+  head('Zahlung');
+  para(`Die Zahlungstermine stehen auf der Rechnung. ${C.paymentNote || ''}`.trim());
+  if (C.confirmText) para(C.confirmText, { bold: true });
+  for (const c of C.clauses || []) {
+    head(c.title);
+    if (c.text.includes(BANK_MARK)) {
+      const bank = [sl.bank && `Name der Bank: ${sl.bank}`, sl.iban && `IBAN: ${sl.iban.replace(/(.{4})/g, '$1 ').trim()}`, sl.bic && `BIC: ${sl.bic}`].filter(Boolean);
+      for (const l of bank) para(l);
+      const rest = c.text.replace(BANK_MARK, '').trim();
+      if (rest) para(rest);
+    } else para(c.text);
+  }
 }
 
 /**

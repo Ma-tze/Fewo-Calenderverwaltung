@@ -452,7 +452,7 @@ function wrap(text, width, size) {
   return out;
 }
 
-export function invoicePdf(inv, { draftSettings = null, xml = null, logo = null } = {}) {
+export function invoicePdf(inv, { draftSettings = null, xml = null, logo = null, note = '', appendPages = null } = {}) {
   const draft = inv.status === 'entwurf';
   const sl = draft ? draftSettings.seller : inv.seller;
   const t = draft ? totals(inv.items, inv.deposit) : inv.totals;
@@ -550,6 +550,7 @@ export function invoicePdf(inv, { draftSettings = null, xml = null, logo = null 
     }
     texts.push(`Bitte überweisen Sie ${sched.length > 1 ? 'die Beträge' : 'den Betrag'} zu den genannten Terminen auf das unten genannte Konto. Verwendungszweck: ${ref}.`);
   }
+  if (note) texts.push(note);
   if (inv.replacesNumber) texts.push(`Diese Rechnung ersetzt die stornierte Rechnung ${inv.replacesNumber} vom ${de(inv.replacesDate)}.`);
   if (inv.input?.ktExempt === 'Geschäftsreise') texts.push('Geschäftsreise: von der Kurtaxe befreit.');
   if (inv.note) texts.push(inv.note);
@@ -563,6 +564,7 @@ export function invoicePdf(inv, { draftSettings = null, xml = null, logo = null 
     [sl.bank, sl.iban && `IBAN ${sl.iban.replace(/(.{4})/g, '$1 ').trim()}`, sl.bic && `BIC ${sl.bic}`, sl.accountHolder && `Inhaber: ${sl.accountHolder}`].filter(Boolean).join(' · '),
     ...(draft ? draftSettings.footer : inv.footer || '') ? [draft ? draftSettings.footer : inv.footer] : [],
   ].filter(Boolean);
+  if (appendPages) appendPages(doc);
   const last = doc.pages.length;
   doc.pages.forEach((p, i) => {
     doc.cur = p;

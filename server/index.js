@@ -19,7 +19,7 @@ import { smoobuConfigured, smoobuAuthMode, listApartments as smoobuApartments, f
 import * as G from './guests.js';
 import * as INV from './invoices.js';
 import { loadImage } from './image.js';
-import { contractPdf, cleanContract, DEFAULT_CONTRACT } from './contract.js';
+import { contractPdf, cleanContract, DEFAULT_CONTRACT, appendTerms } from './contract.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC = path.join(__dirname, '..', 'public');
@@ -526,6 +526,12 @@ const LOGO_DIR = path.join(DATA_DIR, 'logo');
 const DEFAULT_LOGO = path.join(__dirname, 'assets', 'logo-default.png');
 let logoCache = { file: null, img: null };
 // Logo für die Rechnung, falls eingeschaltet (aufbereitet und zwischengespeichert)
+// Rechnung mit Hinweis „Bestätigung durch Anzahlung“ und angehängten Mietbedingungen (nicht bei Storno)
+function termsOpts(inv, S) {
+  const C = S.contract;
+  if (!C?.attachTerms || inv.kind !== 'rechnung') return {};
+  return { note: C.confirmText || '', appendPages: doc => appendTerms(doc, inv, S, C) };
+}
 function currentLogo(S) {
   if (!S.logo?.enabled || !S.logo.file) return null;
   if (logoCache.file !== S.logo.file) {
@@ -550,7 +556,7 @@ function archive(inv) {
   fs.mkdirSync(invDir(inv), { recursive: true });
   const base = path.join(invDir(inv), inv.number.replace(/[^A-Za-z0-9-]/g, '_'));
   const xml = inv.eInvoice ? INV.xrechnungXml(inv) : null;
-  const pdf = INV.invoicePdf(inv, { xml, logo: currentLogo(store.data.invoiceSettings) }).buffer;
+  const pdf = INV.invoicePdf(inv, { xml, ...termsOpts(inv, store.data.invoiceSettings), logo: currentLogo(store.data.invoiceSettings) }).buffer;
   const written = [];
   try {
     if (xml) { fs.writeFileSync(base + '.xml', xml, { flag: 'wx' }); written.push(base + '.xml'); }
@@ -637,7 +643,7 @@ async function handleInvoices(req, res, p, m, d, url) {
       if (inv.status !== 'ausgestellt' || !inv.files?.xml) throw new Error('Für diese Rechnung gibt es keine E-Rechnung.');
       return send(res, 200, fs.readFileSync(path.join(invDir(inv), inv.files.xml)), 'application/xml; charset=utf-8', { 'Content-Disposition': `attachment; filename="${name}.xml"` });
     }
-    const buf = inv.status === 'ausgestellt' && inv.files?.pdf ? fs.readFileSync(path.join(invDir(inv), inv.files.pdf)) : INV.invoicePdf(inv, { draftSettings: S, logo: currentLogo(S) }).buffer;
+    const buf = inv.status === 'ausgestellt' && inv.files?.pdf ? fs.readFileSync(path.join(invDir(inv), inv.files.pdf)) : INV.invoicePdf(inv, { draftSettings: S, logo: currentLogo(S), ...termsOpts(inv, S) }).buffer;
     return send(res, 200, buf, 'application/pdf', { 'Content-Disposition': `inline; filename="${name}.pdf"` });
   }
   if (p === '/api/admin/invoices/test-cleanup' && m === 'POST') {

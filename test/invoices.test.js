@@ -236,3 +236,14 @@ test('Mietvertrag aus der Rechnung, abweichende Anzahlung mit eigenem Termin', a
   assert.match(pdf, /Sa, 27\.06\.2026, 15:00 Uhr/);
   assert.match(pdf, /Salvatorische Klausel/);
 });
+
+test('Rechnung mit Bestätigungshinweis und angehängten Mietbedingungen', async () => {
+  const { appendTerms, DEFAULT_CONTRACT } = await import('../server/contract.js');
+  const { d, inv } = setup();
+  const C = DEFAULT_CONTRACT();
+  const pdf = I.invoicePdf(inv, { draftSettings: d.invoiceSettings, note: C.confirmText, appendPages: doc => appendTerms(doc, inv, d.invoiceSettings, C) }).buffer.toString('latin1');
+  assert.match(pdf, /Mietbedingungen/);
+  assert.match(pdf, /Mit Ihrer Anzahlung bzw\. Zahlung best\xe4tigen Sie die Buchung/);
+  assert.match(pdf, /Salvatorische Klausel/);
+  assert.match(pdf, /\/Count [2-9]/);
+});
