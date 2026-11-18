@@ -27,18 +27,25 @@ export const DEFAULT_SETTINGS = () => ({
   numberPrefix: 'R', counters: {}, paymentDays: 14, vatRate: 7, taxation: 'ist', footer: '',
   payment: { depositPercent: 0, depositDays: 7, depositIfDaysAhead: 30, restDaysBeforeArrival: 14 },
   pricing: { includedPersons: 2, extraAdult: 0, extraChild: 0, childMaxAge: 15, infantMaxAge: 2, cleaning: 0 },
-  kurtaxe: { label: 'Kurtaxe', groups: [
-    { label: 'Kinder bis 5 Jahre', ageFrom: 0, ageTo: 5, rate: 0, rateNeben: null },
-    { label: 'Kinder 6 bis 15 Jahre', ageFrom: 6, ageTo: 15, rate: 0, rateNeben: null },
-    { label: 'Erwachsene ab 16 Jahre', ageFrom: 16, ageTo: 120, rate: 0, rateNeben: null },
-  ] },
+  // Vorbelegung nach Kurtaxesatzung Immenstaad (6. Änderung, ab 01.01.2026)
+  kurtaxe: { label: 'Kurtaxe', mainFrom: '04-01', mainTo: '10-31', groups: IMMENSTAAD_KT() },
 });
+
+export const IMMENSTAAD_KT = () => [
+  { label: 'Kinder bis 14 Jahre (befreit)', ageFrom: 0, ageTo: 14, rate: 0, rateNeben: null },
+  { label: 'ab 15 Jahre', ageFrom: 15, ageTo: 120, rate: 3.5, rateNeben: 2.2 },
+];
+
+export const KT_EXEMPT = ['Geschäftsreise', 'Familienbesuch'];
 
 export function ensure(d) {
   const def = DEFAULT_SETTINGS();
   const cur = d.invoiceSettings || {};
   d.invoiceSettings = { ...def, ...cur, seller: { ...def.seller, ...(cur.seller || {}) }, payment: { ...def.payment, ...(cur.payment || {}) }, pricing: { ...def.pricing, ...(cur.pricing || {}) },
     kurtaxe: { ...def.kurtaxe, ...(cur.kurtaxe || {}) }, counters: { ...(cur.counters || {}) } };
+  // alte, nie ausgefüllte Vorbelegung (alle Sätze 0) durch die Immenstaader Sätze ersetzen
+  const K = d.invoiceSettings.kurtaxe;
+  if (!K.groups?.length || K.groups.every(g => !g.rate && !g.rateNeben)) K.groups = IMMENSTAAD_KT();
   d.invoices ||= [];
   return d;
 }
@@ -71,6 +78,14 @@ export function cleanSettings(b, prev) {
   }
   if (b.kurtaxe) {
     if (b.kurtaxe.label !== undefined) out.kurtaxe.label = s(b.kurtaxe.label, 40) || 'Kurtaxe';
+    for (const k of ['mainFrom', 'mainTo']) if (b.kurtaxe[k] !== undefined) {
+      const v = String(b.kurtaxe[k] || '').trim();
+      const m = v.match(/^(\d{1,2})\.(\d{1,2})\.?$/) || v.match(/^(?:\d{4}-)?(\d{2})-(\d{2})$/);
+      let md = '';
+      if (m) md = v.includes('.') ? `${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}` : `${m[1]}-${m[2]}`;
+      if (v && !(md && !isNaN(Date.parse(`2024-${md}`)))) throw new Error('Datum der Kurtaxe-Hauptsaison bitte als TT.MM. eingeben');
+      out.kurtaxe[k] = md;
+    }
     if (Array.isArray(b.kurtaxe.groups)) out.kurtaxe.groups = b.kurtaxe.groups.slice(0, 10).map(g => {
       const ageFrom = Math.trunc(num(g.ageFrom)), ageTo = Math.trunc(num(g.ageTo));
       if (!(ageFrom >= 0 && ageTo >= ageFrom && ageTo <= 120)) throw new Error('Altersgrenzen der Kurtaxe ungültig');
@@ -84,8 +99,18 @@ export function cleanSettings(b, prev) {
 
 /* ---------- Berechnung ---------- */
 
-// Ordnet jede Nacht einer Saison zu ('haupt' oder 'neben'); Nächte ohne Saison zählen als 'neben'
-function seasonNights(seasons, from, to) {
+// Ordnet jede Nacht einer Saison zu ('haupt' oder 'neben'). Mit festen Kurtaxe-Daten (MM-TT) zählen diese,
+// sonst die Hauptsaisons aus den Einstellungen; Nächte ohne Saison zählen als 'neben'.
+function seasonNights(seasons, from, to, K = {}) {
+  if (K.mainFrom && K.mainTo) {
+    let haupt = 0, neben = 0;
+    for (let d = from; d < to; d = addDays(d, 1)) {
+      const md = d.slice(5);
+      const inMain = K.mainFrom <= K.mainTo ? md >= K.mainFrom && md <= K.mainTo : md >= K.mainFrom || md <= K.mainTo;
+      inMain ? haupt++ : neben++;
+    }
+    return { haupt, neben };
+  }
   const years = []; for (let y = +from.slice(0, 4); y <= +to.slice(0, 4); y++) years.push(y);
   const exp = expandSeasons(seasons || [], years);
   let haupt = 0, neben = 0;
@@ -113,7 +138,8 @@ export function computeItems(settings, seasons, input) {
   if (extraAdults && P.extraAdult) items.push({ text: `Mehrbelegung Erwachsene (${extraAdults} Pers. ab ${included + 1}. Person)`, qty: extraAdults * n, unit: 'Pers.-Nacht', price: P.extraAdult, vat: vatRate, kind: 'extra' });
   if (extraChildren && P.extraChild) items.push({ text: `Mehrbelegung Kinder bis ${P.childMaxAge} Jahre (${extraChildren} Kind${extraChildren > 1 ? 'er' : ''})`, qty: extraChildren * n, unit: 'Pers.-Nacht', price: P.extraChild, vat: vatRate, kind: 'extra' });
   if (input.cleaning && P.cleaning) items.push({ text: 'Endreinigung', qty: 1, unit: 'pauschal', price: P.cleaning, vat: vatRate, kind: 'cleaning' });
-  const sn = seasonNights(seasons, input.from, input.to);
+  const sn = seasonNights(seasons, input.from, input.to, K);
+  if (KT_EXEMPT.includes(input.ktExempt)) return items;
   for (const g of K.groups) {
     const cnt = ages.filter(a => a >= g.ageFrom && a <= g.ageTo).length;
     if (!cnt) continue;
@@ -268,6 +294,12 @@ export function updateDraft(d, inv, b) {
     if (b.input.perNight !== undefined) inv.input.perNight = r2(num(b.input.perNight));
     if (b.input.ages !== undefined) inv.input.ages = (Array.isArray(b.input.ages) ? b.input.ages : String(b.input.ages).split(/[,;\s]+/)).filter(x => x !== '').map(x => Math.trunc(num(x))).filter(a => a >= 0 && a <= 120).slice(0, 20);
     if (b.input.cleaning !== undefined) inv.input.cleaning = !!b.input.cleaning;
+    if (b.input.ktExempt !== undefined) {
+      inv.input.ktExempt = KT_EXEMPT.includes(b.input.ktExempt) ? b.input.ktExempt : '';
+      // nur die Kurtaxe-Positionen neu setzen, Handänderungen an anderen Positionen bleiben
+      const kt = computeItems(d.invoiceSettings, d.seasons, inv.input).filter(i => i.kind === 'kurtaxe');
+      inv.items = (inv.items || []).filter(i => i.kind !== 'kurtaxe').concat(kt);
+    }
     if (b.input.plan !== undefined) inv.input.plan = b.input.plan === 'full' ? 'full' : 'auto';
   }
   if (b.items) inv.items = cleanItems(b.items);

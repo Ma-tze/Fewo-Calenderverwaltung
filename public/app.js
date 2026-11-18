@@ -801,12 +801,17 @@
         <p class="small">Die im Grundpreis enthaltenen Plätze werden zuerst mit Erwachsenen belegt. Alle weiteren Personen kosten den Mehrbelegungspreis.</p>
       </section>
       <section class="sec"><h3>Kurtaxe (ohne Umsatzsteuer)</h3>
-        <p class="d">Sätze je Person und Nacht nach Alter. Gilt in der Nebensaison ein anderer Satz, trag ihn rechts ein. Die Saisons kommen aus ⚙ Einstellungen.</p>
-        <div class="row"><label>Bezeichnung auf der Rechnung <input class="in" id="ktLabel" value="${esc(S.kurtaxe.label)}" style="width:200px"></label></div>
+        <p class="d">Sätze je Person und Aufenthaltstag nach Alter (gezählt wird je Nacht, An- und Abreisetag zusammen als ein Tag). Vorbelegt nach der Kurtaxesatzung Immenstaad ab 01.01.2026: ab 15 Jahre 3,50 € (01.04. bis 31.10.) und 2,20 € (übrige Zeit), Kinder bis 14 Jahre frei. Geschäftsreisende und Familienbesuche befreist du direkt in der Rechnung.</p>
+        <div class="row"><label>Bezeichnung auf der Rechnung <input class="in" id="ktLabel" value="${esc(S.kurtaxe.label)}" style="width:200px"></label>
+          <label>Hauptsaison vom <input class="in short" data-ktm="mainFrom" value="${mdDe(S.kurtaxe.mainFrom)}" placeholder="TT.MM." style="width:80px"></label>
+          <label>bis <input class="in short" data-ktm="mainTo" value="${mdDe(S.kurtaxe.mainTo)}" placeholder="TT.MM." style="width:80px"></label>
+          <span class="small">leer = Hauptsaisons aus ⚙ Einstellungen</span></div>
         <div class="tbl"><table><thead><tr><th>Gruppe</th><th>Alter</th><th>€ Hauptsaison</th><th>€ übrige Zeit</th><th></th></tr></thead><tbody>${kt}</tbody></table></div>
         <div class="row"><button class="mini" type="button" id="ktAdd">+ Altersgruppe</button></div>
       </section></div>`;
   }
+
+  const mdDe = md => (md ? `${md.slice(3)}.${md.slice(0, 2)}.` : '');
 
   function invEditor() {
     const { invoice: I, totals: T, missing, schedule, payments, open } = ivs.cur;
@@ -865,6 +870,7 @@
           <label>Grundpreis je Nacht (€, brutto)<input class="in" data-in="perNight" value="${num2(I.input.perNight)}"></label>
           <label class="wide">Alter aller Reisenden, mit Komma getrennt (für Mehrbelegung und Kurtaxe)<input class="in" data-in="ages" value="${esc((I.input.ages || []).join(', '))}" placeholder="z. B. 45, 43, 12, 4"></label>
           <label style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" data-in="cleaning" ${I.input.cleaning ? 'checked' : ''}> Endreinigung berechnen</label>
+          <label>Kurtaxe<select class="in" data-in="ktExempt">${[['', 'nach Alter berechnen'], ['Geschäftsreise', 'befreit: Geschäftsreise'], ['Familienbesuch', 'befreit: unentgeltlicher Familienbesuch']].map(([k, t]) => `<option value="${k}" ${(I.input.ktExempt || '') === k ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
         </div>
         <div class="row"><button class="btn primary" type="button" id="ivRecalc">Positionen neu berechnen</button><span class="small">Überschreibt die Positionen unten mit den Preisbausteinen.</span></div>
       </section>
@@ -926,6 +932,7 @@
       $$('[data-pay]').forEach(i => i.onchange = () => save({ payment: { [i.dataset.pay]: i.value } }));
       $('#ivNext').onchange = e => save({ nextNumber: { year: new Date().getFullYear(), value: e.target.value } });
       $('#ktLabel').onchange = e => save({ kurtaxe: { label: e.target.value } });
+      $$('[data-ktm]').forEach(i => i.onchange = () => save({ kurtaxe: { [i.dataset.ktm]: i.value } }));
       const groups = () => S.kurtaxe.groups.map(g => ({ ...g }));
       $$('[data-kt]').forEach(i => i.onchange = () => { const [n, k] = i.dataset.kt.split('|'); const g = groups(); g[+n][k] = i.value; save({ kurtaxe: { groups: g } }); });
       $$('[data-ktdel]').forEach(b => b.onclick = () => { const g = groups(); g.splice(+b.dataset.ktdel, 1); save({ kurtaxe: { groups: g } }); });

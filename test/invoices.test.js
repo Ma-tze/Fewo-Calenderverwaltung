@@ -8,7 +8,7 @@ function setup() {
   d.invoiceSettings = I.cleanSettings({
     seller: { name: 'Erika Muster', street: 'Seestraße 5', zip: '88090', city: 'Immenstaad', phone: '07545 1', email: 'e@example.de', taxNumber: '61/123/45678', iban: 'DE02 1203 0000 0000 2020 51' },
     pricing: { extraAdult: 15, extraChild: 8, cleaning: 60 },
-    kurtaxe: { groups: [{ label: 'Kinder bis 5', ageFrom: 0, ageTo: 5, rate: 0 }, { label: 'Kinder', ageFrom: 6, ageTo: 15, rate: '1,10', rateNeben: '0,80' }, { label: 'Erwachsene', ageFrom: 16, ageTo: 120, rate: '2,60', rateNeben: '1,90' }] },
+    kurtaxe: { mainFrom: '', mainTo: '', groups: [{ label: 'Kinder bis 5', ageFrom: 0, ageTo: 5, rate: 0 }, { label: 'Kinder', ageFrom: 6, ageTo: 15, rate: '1,10', rateNeben: '0,80' }, { label: 'Erwachsene', ageFrom: 16, ageTo: 120, rate: '2,60', rateNeben: '1,90' }] },
   }, d.invoiceSettings);
   const inv = I.draftFromStay(d, { id: 1, start: '2026-06-27', end: '2026-07-04', price: 693, adults: 3, children: 2 },
     { id: 1, name: 'Familie Weber', address: 'Lindenweg 3, 70173 Stuttgart', email: 'w@example.org' }, 'Fewo 2');
@@ -132,4 +132,23 @@ test('QR-Code für die Überweisung (GiroCode)', async () => {
   assert.deepEqual(m[0].slice(0, 7), Array(7).fill(true));
   assert.deepEqual(m[1].slice(0, 7), [true, false, false, false, false, false, true]);
   assert.throws(() => epcPayload({ name: 'X', iban: '', amount: 1 }));
+});
+
+test('Kurtaxe Immenstaad: feste Hauptsaison, Kinder bis 14 frei, Befreiung Geschäftsreise', async () => {
+  const INV = await import('../server/invoices.js');
+  const d = {}; INV.ensure(d);
+  const S = d.invoiceSettings;
+  const kt = items => items.filter(i => i.kind === 'kurtaxe').map(i => [i.qty, i.price]);
+  // 29.10. bis 03.11.: 3 Nächte Hauptsaison (29., 30., 31.10.), 2 Nächte übrige Zeit
+  const base = { from: '2026-10-29', to: '2026-11-03', perNight: 100, ages: [45, 15, 14, 3] };
+  assert.deepEqual(kt(INV.computeItems(S, [], base)), [[6, 3.5], [4, 2.2]]);
+  assert.deepEqual(kt(INV.computeItems(S, [], { ...base, ktExempt: 'Geschäftsreise' })), []);
+  // alte Vorbelegung mit lauter 0-Sätzen wird ersetzt, eingetragene Sätze bleiben
+  const old = { invoiceSettings: { kurtaxe: { label: 'Kurtaxe', groups: [{ label: 'x', ageFrom: 0, ageTo: 120, rate: 0, rateNeben: null }] } } };
+  INV.ensure(old);
+  assert.equal(old.invoiceSettings.kurtaxe.groups[1].rate, 3.5);
+  const mine = { invoiceSettings: { kurtaxe: { groups: [{ label: 'x', ageFrom: 0, ageTo: 120, rate: 2, rateNeben: null }] } } };
+  INV.ensure(mine);
+  assert.equal(mine.invoiceSettings.kurtaxe.groups[0].rate, 2);
+  assert.equal(INV.cleanSettings({ kurtaxe: { mainFrom: '1.5.' } }, S).kurtaxe.mainFrom, '05-01');
 });
