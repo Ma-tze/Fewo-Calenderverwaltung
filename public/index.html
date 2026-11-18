@@ -23,6 +23,12 @@
       <h1 id="title">Belegung Ferienwohnungen</h1>
       <div class="sub" id="standLine">Lade …</div>
     </div>
+    <nav class="dock" id="dock" aria-label="Ansicht wählen">
+      <button type="button" data-nav="today">Heute</button>
+      <button type="button" data-nav="w4">4 Wochen</button>
+      <button type="button" data-nav="m3">3 Monate</button>
+      <button type="button" data-nav="year">Jahr</button>
+    </nav>
     <div class="top-actions">
       <span class="pdfbox pc-only"><input type="month" id="pdfMonth" aria-label="Monat für PDF"><button class="chip" id="pdfBtn" type="button" title="Monatsübersicht mit Kontaktdaten">🖨 Monat als PDF</button></span>
       <button class="chip pc-only" id="setBtn" type="button">⚙ Einstellungen</button>
@@ -31,18 +37,11 @@
 
   <div id="banner" class="notice" hidden></div>
 
-  <nav class="dock" id="dock" aria-label="Ansicht wählen">
-    <button type="button" data-nav="today">Heute</button>
-    <button type="button" data-nav="w4">4 Wochen</button>
-    <button type="button" data-nav="m3">3 Monate</button>
-    <button type="button" data-nav="year">Jahr</button>
-  </nav>
 
   <div class="toolbar" id="toolbar">
     <h2 id="rangeTitle"></h2>
+    <div class="summary" id="summary"></div>
   </div>
-
-  <div class="summary" id="summary"></div>
   <main id="view"></main>
   <div class="legend" id="legend"></div>
 
