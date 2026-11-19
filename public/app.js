@@ -1339,6 +1339,59 @@
       + card('compare', portalHintText ? 'tone-e' : 'tone-ok', 'Portal-Abgleich', portalHintText ? 'weicht ab' : 'stimmt', portalHintText.replace(/^Portal-Abgleich: /, '') || 'Bodensee-Portale passen zur Belegung', 'portale');
     $$('#pcKpi [data-pcgo]').forEach(b => b.onclick = () => pcGo(b.dataset.pcgo));
   }
+  // Dialog „Belegung drucken“: ein Monat, ein ganzes Jahr (12 Seiten) oder ein Zeitraum
+  const MON = ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez'];
+  const MONL = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
+  const pr = { mode: 'monat', year: null, a: null, b: null, kontakt: true, pick: false };
+  function pcPrintDialog() {
+    const ym = (y, m) => `${y}-${String(m + 1).padStart(2, '0')}`;
+    const lbl = v => `${MONL[+v.slice(5) - 1]} ${v.slice(0, 4)}`;
+    if (!pr.year) { pr.year = TODAY.getFullYear(); pr.a = pr.b = ym(pr.year, TODAY.getMonth()); }
+    const range = () => {
+      if (pr.mode === 'jahr') return [ym(pr.year, 0), ym(pr.year, 11)];
+      if (pr.mode === 'monat') return [pr.a, pr.a];
+      return pr.a <= pr.b ? [pr.a, pr.b] : [pr.b, pr.a];
+    };
+    const draw = () => {
+      const [from, to] = range();
+      const n = (+to.slice(0, 4) - +from.slice(0, 4)) * 12 + (+to.slice(5) - +from.slice(5)) + 1;
+      const cur = ym(TODAY.getFullYear(), TODAY.getMonth());
+      $('#prBody').innerHTML = `
+        <div class="pc-seg" role="tablist">${[['monat', 'Ein Monat'], ['jahr', 'Ganzes Jahr'], ['zeitraum', 'Zeitraum']].map(([k, t]) => `<button type="button" role="tab" data-prmode="${k}" aria-selected="${pr.mode === k}">${t}</button>`).join('')}</div>
+        <div class="pc-yr"><button class="mini" type="button" data-pryear="-1" aria-label="Jahr zurück">‹</button><b>${pr.year}</b><button class="mini" type="button" data-pryear="1" aria-label="Jahr vor">›</button></div>
+        <div class="pc-months${pr.mode === 'jahr' ? ' all' : ''}">${MON.map((t, m) => { const v = ym(pr.year, m); const on = v >= from && v <= to; const edge = pr.mode !== 'jahr' && (v === from || v === to); return `<button type="button" data-prm="${v}" class="${on ? 'on' : ''}${edge ? ' edge' : ''}${v === cur ? ' now' : ''}">${t}</button>`; }).join('')}</div>
+        <p class="pc-prhint">${pr.mode === 'zeitraum' ? (pr.pick ? 'Jetzt den letzten Monat anklicken.' : 'Ersten und letzten Monat anklicken. Mit ‹ › geht es auch über den Jahreswechsel.') : pr.mode === 'jahr' ? 'Jeder Monat kommt auf eine eigene Seite.' : 'Monat anklicken.'}</p>
+        <label class="pc-check"><input type="checkbox" id="prKontakt"${pr.kontakt ? ' checked' : ''}> Mit Telefon und E-Mail der Gäste<small>Ohne Haken als Aushang, z. B. für die Putzhilfe.</small></label>
+        <div class="pc-prsum"><b>${n === 1 ? lbl(from) : pr.mode === 'jahr' ? `Jahr ${pr.year}` : `${lbl(from)} bis ${lbl(to)}`}</b><span>${n} ${n === 1 ? 'Monat' : 'Monate'}, je Monat eine Seite im Querformat</span></div>`;
+      $$('[data-prmode]').forEach(b => b.onclick = () => {
+        pr.mode = b.dataset.prmode; pr.pick = false;
+        if (pr.mode !== 'zeitraum') pr.b = pr.a;
+        if (pr.mode === 'monat' && pr.a.slice(0, 4) !== String(pr.year)) pr.a = pr.b = ym(pr.year, 0);
+        draw();
+      });
+      $$('[data-pryear]').forEach(b => b.onclick = () => { pr.year += +b.dataset.pryear; draw(); });
+      $$('[data-prm]').forEach(b => b.onclick = () => {
+        const v = b.dataset.prm;
+        if (pr.mode === 'jahr') return;
+        if (pr.mode === 'monat') pr.a = pr.b = v;
+        else if (pr.pick) { pr.b = v; pr.pick = false; } else { pr.a = pr.b = v; pr.pick = true; }
+        draw();
+      });
+      $('#prKontakt').onchange = e => { pr.kontakt = e.target.checked; };
+      $('#prGo').disabled = n > 24;
+      $('#prGo').title = n > 24 ? 'Höchstens 24 Monate auf einmal' : '';
+    };
+    overlay(`<h2>Belegung drucken</h2><div id="prBody" class="pc-pr"></div>
+      <div class="row end"><button class="btn" type="button" id="prCancel">Abbrechen</button><button class="btn primary" type="button" id="prGo">${pcIcon('printer')}PDF öffnen</button></div>`);
+    pr.pick = false;
+    draw();
+    $('#prCancel').onclick = closeOverlay;
+    $('#prGo').onclick = () => {
+      const [from, to] = range();
+      window.open(`/export/monat.pdf?m=${from}${to !== from ? `&bis=${to}` : ''}${pr.kontakt ? '' : '&kontakt=0'}`, '_blank');
+      closeOverlay();
+    };
+  }
   function pcBadges() {
     const b = $('.pc-nav a[data-k="portale"] .nb');
     if (b) { b.hidden = !portalHintText; b.textContent = '!'; }
@@ -1363,7 +1416,7 @@
           <div class="lab">Belegung</div>${a('kalender')}${a('gaeste')}${a('rechnungen')}
           <div class="lab">Abgleich</div>${a('portale')}${a('firma')}
           <div class="lab">Auswertung</div>${a('ust')}
-          <div class="lab">Ausdrucken</div><div class="pc-print" id="pcPrint"></div>
+          <div class="lab">Ausdrucken</div><a data-print>${pcIcon('printer')}<span>Belegung drucken</span></a>
           <div class="lab">Einstellungen</div>${a('wohnungen')}${a('saisons')}${a('preise')}${a('vertrag')}
         </nav>
         <div class="pc-foot"><button class="pc-theme" type="button"></button></div>
@@ -1371,16 +1424,14 @@
     const app = $('.app');
     app.parentNode.insertBefore(shell, app);
     $('.pc-main').appendChild(app);
-    $$('.pc-nav a').forEach(x => { x.href = '#'; x.onclick = e => { e.preventDefault(); pcGo(x.dataset.k); }; });
+    $$('.pc-nav a').forEach(x => { x.href = '#'; x.onclick = e => { e.preventDefault(); if (x.dataset.k) pcGo(x.dataset.k); else { $('.pc-side').classList.remove('open'); pcPrintDialog(); } }; });
     // Kopfzeile: Menü-Knopf für schmale Fenster, Untertitel, PDF-Knopf mit Symbol
     const top = $('header.top');
     top.insertAdjacentHTML('afterbegin', `<button class="pc-menu" type="button" aria-label="Menü">${pcIcon('menu')}</button>`);
     $('.pc-menu').onclick = () => $('.pc-side').classList.toggle('open');
     $('#standLine').insertAdjacentHTML('afterend', '<div class="sub" id="pcSub" hidden></div>');
     $('#title').parentElement.style.flex = '1';
-    // Monatsübersicht drucken: Monatsfeld und Knopf in die Seitenleiste
-    $('#pdfBtn').innerHTML = `${pcIcon('printer')}<span>Monat drucken (PDF)</span>`;
-    $('#pcPrint').appendChild($('.pdfbox'));
+    $('.pdfbox').hidden = true; // Drucken läuft über den Dialog „Belegung drucken“ in der Seitenleiste
     // Kalender-Umschalter und Blättern in die Werkzeugleiste über der Tabelle
     const tb = $('#toolbar');
     tb.prepend($('#dock'));

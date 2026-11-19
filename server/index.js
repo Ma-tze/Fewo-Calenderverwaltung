@@ -13,7 +13,7 @@ import { Store } from './store.js';
 import { parseICS, buildICS, parsePastedPlan, parsePlanText, isValidDay, addDays } from './ical.js';
 import { execFile } from 'node:child_process';
 import os from 'node:os';
-import { monthPdf } from './report.js';
+import { monthsPdf } from './report.js';
 import { fetchHolidays, expandSeasons, copySeasons } from './holidays.js';
 import { smoobuConfigured, smoobuAuthMode, listApartments as smoobuApartments, fetchReservations } from './smoobu.js';
 import * as G from './guests.js';
@@ -279,7 +279,12 @@ async function handle(req, res, mode) {
   if (pdfm) {
     const ym = url.searchParams.get('m') || new Date().toISOString().slice(0, 7);
     if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(ym)) return send(res, 400, 'Monat bitte als JJJJ-MM angeben.', 'text/plain; charset=utf-8');
-    const { buffer, filename } = monthPdf(calendarPayload(), ym, { contacts: url.searchParams.get('kontakt') !== '0' });
+    // optional bis=JJJJ-MM: mehrere Monate (höchstens 24), z. B. ein ganzes Jahr
+    const bis = url.searchParams.get('bis') || ym;
+    if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(bis) || bis < ym) return send(res, 400, 'Zeitraum bitte als JJJJ-MM bis JJJJ-MM angeben.', 'text/plain; charset=utf-8');
+    const span = (+bis.slice(0, 4) - +ym.slice(0, 4)) * 12 + (+bis.slice(5) - +ym.slice(5)) + 1;
+    if (span > 24) return send(res, 400, 'Höchstens 24 Monate auf einmal.', 'text/plain; charset=utf-8');
+    const { buffer, filename } = monthsPdf(calendarPayload(), ym, bis, { contacts: url.searchParams.get('kontakt') !== '0' });
     return send(res, 200, buffer, 'application/pdf', { 'Content-Disposition': `inline; filename="${filename}"` });
   }
 

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { monthPdf } from '../server/report.js';
+import { monthPdf, monthsPdf } from '../server/report.js';
 
 const cal = {
   apartments: [{ id: 1, name: 'Fewo 1', nick: 'Firma', color: 'p1' }, { id: 2, name: 'Fewo 2', nick: 'Fewo 2', color: 'p2' }],
@@ -25,4 +25,14 @@ test('Aushang-Variante ohne Kontaktdaten', () => {
   const { buffer, filename } = monthPdf(cal, '2026-12', { contacts: false });
   assert.equal(filename, 'Belegung-2026-12-Aushang.pdf');
   assert.ok(!buffer.toString('latin1').includes('a@b.de'));
+});
+
+test('Jahres-PDF hat je Monat mindestens eine Seite, Zeitraum über den Jahreswechsel', () => {
+  const y = monthsPdf(cal, '2026-01', '2026-12');
+  assert.equal(y.filename, 'Belegung-2026.pdf');
+  assert.ok(+y.buffer.toString('latin1').match(/\/Count (\d+)/)[1] >= 13); // Dezember mit langer Liste braucht 2 Seiten
+  const z = monthsPdf(cal, '2026-11', '2027-02', { contacts: false });
+  assert.equal(z.filename, 'Belegung-2026-11-bis-2027-02-Aushang.pdf');
+  assert.ok(+z.buffer.toString('latin1').match(/\/Count (\d+)/)[1] >= 4);
+  assert.equal(monthsPdf(cal, '2026-12', '2026-12').filename, 'Belegung-2026-12.pdf');
 });
