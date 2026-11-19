@@ -56,7 +56,8 @@
     }
     const now = midnight();
     if (!same(now, TODAY)) { TODAY = now; }
-    if (!['settings', 'guests', 'invoices'].includes(state.view)) render(); else renderTop();
+    if (!['settings', 'guests', 'invoices', 'portals'].includes(state.view)) render(); else renderTop();
+    if (MODE === 'admin') checkPortals();
   }
 
   /* ---------- Kopf ---------- */
@@ -195,8 +196,10 @@
 
   function render() {
     renderTop();
-    const set = state.view === 'settings', gv = state.view === 'guests', iv = state.view === 'invoices';
-    ['#toolbar', '#summary', '#legend', '#dock', '#arrows'].forEach(s => { $(s).hidden = set || gv || iv; });
+    const set = state.view === 'settings', gv = state.view === 'guests', iv = state.view === 'invoices', pv = state.view === 'portals';
+    ['#toolbar', '#summary', '#legend', '#dock', '#arrows'].forEach(s => { $(s).hidden = set || gv || iv || pv; });
+    if ($('#portBtn')) $('#portBtn').textContent = pv ? '◀ Zurück zum Kalender' : '🔎 Portal-Abgleich';
+    if ($('#portalHint')) $('#portalHint').hidden = pv || !portalHintText;
     if ($('#invBtn')) $('#invBtn').textContent = iv ? '◀ Zurück zum Kalender' : '🧾 Rechnungen';
     $('#setBtn').textContent = set ? '◀ Zurück zum Kalender' : '⚙ Einstellungen';
     if ($('#guestBtn')) $('#guestBtn').textContent = gv ? '◀ Zurück zum Kalender' : '👥 Gäste';
@@ -204,6 +207,7 @@
     if (set) return renderSettings();
     if (gv) return renderGuests();
     if (iv) return renderInvoices();
+    if (pv) return renderPortals();
     if (!data.apartments.length) { v.innerHTML = `<div class="empty">${loadError ? 'Keine Verbindung zum Server.' : 'Lade …'}</div>`; return; }
     if (state.view === 'w4') {
       $('#rangeTitle').textContent = `4 Wochen: ${fy(state.start)} bis ${fy(add(state.start, 27))}`;
@@ -1081,6 +1085,128 @@
     };
   }
 
+  /* ---------- Portal-Abgleich (nur PC) ---------- */
+
+  const pst = { months: 6, res: null };
+  let portalHintText = '';
+
+  async function checkPortals() {
+    try {
+      const r = await api('/api/admin/portals?months=6');
+      const bad = r.portals.filter(p => p.counts && (p.counts.portalZu || p.counts.portalOffen));
+      portalHintText = bad.length ? `Portal-Abgleich: ${bad.map(p => `${p.name} weicht an ${p.counts.portalZu + p.counts.portalOffen} Nächten ab`).join(', ')}.` : '';
+    } catch { portalHintText = ''; }
+    const h = $('#portalHint');
+    if (!h) return;
+    h.innerHTML = portalHintText ? `${esc(portalHintText)} <button class="mini" type="button" id="portHintBtn">Ansehen</button>` : '';
+    h.hidden = !portalHintText || state.view === 'portals';
+    if ($('#portHintBtn')) $('#portHintBtn').onclick = () => { state.view = 'portals'; render(); window.scrollTo(0, 0); };
+  }
+
+  const STATE_TXT = {
+    'portal-zu': 'Portal zeigt belegt, aber in Smoobu ist noch frei',
+    'portal-offen': 'Alle Wohnungen belegt, Portal zeigt aber frei',
+  };
+
+  async function renderPortals() {
+    const v = $('#view');
+    if (MODE !== 'admin') { state.view = 'w4'; return render(); }
+    try { pst.res = await api(`/api/admin/portals?months=${pst.months}`); } catch (e) { v.innerHTML = `<div class="notice warn">${esc(e.message)}</div>`; return; }
+    const R = pst.res;
+    const A = id => R.apartments.find(a => a.id === id);
+    const when = t => t ? new Date(t).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' }) : '–';
+    const dd = s => fy(D(s));
+    const lastNight = s => fy(add(D(s), -1));
+    const cand = R.apartments.filter(a => a.source !== 'own');
+
+    const cfgRows = R.portals.map(p => {
+      const st = !p.hasUrl ? '<span class="badge off">kein Link</span>'
+        : p.error ? `<span class="badge err">Fehler</span> <span class="small">${esc(p.error)}${p.fetchedAt ? `, zeige Stand ${when(p.fetchedAt)}` : ''}</span>`
+        : p.fetchedAt ? `<span class="badge ok">ok</span> <span class="small">${when(p.fetchedAt)} · ${p.count} Einträge</span>` : '<span class="badge off">noch nicht abgerufen</span>';
+      return `<tr>
+        <td><input class="in" data-pname="${p.id}" value="${esc(p.name)}" style="min-width:200px"></td>
+        <td style="min-width:300px"><div class="row"><input class="in" data-purl="${p.id}" placeholder="${p.hasUrl ? `hinterlegt (${esc(p.urlHost)}) – zum Ändern neuen Link einfügen` : 'iCal-Export-Link des Portals einfügen'}" autocomplete="off"><button class="mini" type="button" data-psave="${p.id}">Speichern</button></div></td>
+        <td style="white-space:nowrap">${cand.map(a => `<label class="small" style="margin-right:8px"><input type="checkbox" data-papt="${p.id}|${a.id}" ${p.apts.includes(a.id) ? 'checked' : ''}> ${esc(a.name)}</label>`).join('')}</td>
+        <td>${st}</td>
+        <td><button class="mini" type="button" data-pdel="${p.id}" aria-label="Portal entfernen">✕</button></td></tr>`;
+    }).join('');
+
+    const active = R.portals.filter(p => p.days);
+    const summary = active.map(p => {
+      const c = p.counts;
+      const okAll = !c.portalZu && !c.portalOffen;
+      const rows = p.ranges.map(r => `<tr class="${r.state === 'portal-zu' ? 'bad' : ''}">
+        <td>${dd(r.from)} – ${lastNight(r.to)}</td><td>Abreise ${dd(r.to)}</td><td style="text-align:right">${r.nights}</td>
+        <td>${r.state === 'portal-zu' ? '<span class="badge err">zu</span>' : '<span class="badge warn">offen</span>'} ${STATE_TXT[r.state]}</td>
+        <td>${r.state === 'portal-zu' ? `frei: ${r.free.map(id => esc(A(id)?.name || id)).join(', ')}` : ''}</td></tr>`).join('');
+      return `<section class="sec"><h3>${esc(p.name)} ${okAll ? '<span class="badge ok">✓ stimmt</span>' : `<span class="badge err">${c.portalZu + c.portalOffen} Nächte weichen ab</span>`}</h3>
+        <p class="d">Geprüft: ${dd(R.from)} bis ${lastNight(R.to)}, ${c.nights} Nächte. Stimmt an ${c.ok} Nächten. Portal meldet ${c.portalNights} Nächte als belegt. Stand Portal: ${when(p.fetchedAt)}.</p>
+        ${rows ? `<div class="tbl"><table><thead><tr><th>Nächte</th><th></th><th style="text-align:right">Anzahl</th><th>Abweichung</th><th>Wohnungen</th></tr></thead><tbody>${rows}</tbody></table></div>` : '<p class="small">Keine Abweichungen.</p>'}
+      </section>`;
+    }).join('');
+
+    // Monatsraster: je Wohnung eine Zeile, je Portal eine Zeile Portal + eine Zeile Abgleich
+    let grids = '';
+    if (active.length) {
+      const allApts = [...new Set(active.flatMap(p => p.apts))].sort((a, b) => R.apartments.findIndex(x => x.id === a) - R.apartments.findIndex(x => x.id === b));
+      const byMonth = new Map();
+      active[0].days.forEach((x, i) => { const k = x.d.slice(0, 7); if (!byMonth.has(k)) byMonth.set(k, []); byMonth.get(k).push(i); });
+      for (const [k, idx] of byMonth) {
+        const first = D(active[0].days[idx[0]].d);
+        const head = idx.map(i => { const dt = D(active[0].days[i].d); return `<th class="${dt.getDay() === 6 ? 'sa' : ''}">${dt.getDate()}<br><span>${WD[dt.getDay()]}</span></th>`; }).join('');
+        const aptRows = allApts.map(id => { const a = A(id); return `<tr><td class="pl"><i style="background:${color(a?.color)}"></i>${esc(a?.name || id)}</td>${idx.map(i => {
+          const busy = active.some(p => p.days[i].busy.includes(id));
+          return `<td class="${busy ? 'on' : ''}" style="${busy ? `background:${color(a?.color)}` : ''}" title="${busy ? 'belegt' : 'frei'}"></td>`; }).join('')}</tr>`; }).join('');
+        const pRows = active.map(p => `<tr class="pp"><td class="pl">${esc(p.name)}</td>${idx.map(i => `<td class="${p.days[i].portal ? 'pon' : ''}" title="${p.days[i].portal ? 'Portal: belegt' : 'Portal: frei'}"></td>`).join('')}</tr>
+          <tr class="pc"><td class="pl small">Abgleich</td>${idx.map(i => { const s = p.days[i].state; return `<td class="${s}" title="${s.startsWith('ok') ? 'stimmt' : STATE_TXT[s]}">${s === 'portal-zu' ? '✕' : s === 'portal-offen' ? '!' : ''}</td>`; }).join('')}</tr>`).join('');
+        grids += `<div class="pgrid tbl"><table><caption>${MONTHS[first.getMonth()]} ${first.getFullYear()}</caption><thead><tr><th></th>${head}</tr></thead><tbody>${aptRows}${pRows}</tbody></table></div>`;
+      }
+    }
+
+    v.innerHTML = `<div class="settings" style="grid-template-columns:minmax(0,1fr)"><div class="sbody">
+      <section class="sec"><h3>Portal-Abgleich</h3>
+        <p class="d">Die Bodensee-Portale führen alle Wohnungen als <b>ein</b> Objekt. Richtig ist: Das Portal zeigt eine Nacht als belegt, wenn <b>alle</b> angehakten Wohnungen laut Smoobu belegt sind, sonst frei. Gezählt werden Nächte (Abreisetag zählt nicht).</p>
+        <div class="row">Zeitraum <select class="in" id="pMonths" style="width:auto">${[3, 6, 12, 18].map(n => `<option value="${n}" ${n === pst.months ? 'selected' : ''}>${n} Monate</option>`).join('')}</select>
+          <button class="mini" type="button" id="pRefresh">Jetzt abrufen</button>
+          <span class="small">Legende: <b>✕</b> Portal zu, obwohl noch frei · <b>!</b> alles belegt, Portal offen</span></div>
+      </section>
+      ${summary || '<div class="notice">Noch kein Portal-Kalender abgerufen. Unten den iCal-Export-Link des Portals eintragen (im Vermieter-Bereich des Portals beim Belegungskalender, „iCal-Export“).</div>'}
+      ${grids ? `<section class="sec"><h3>Tag für Tag</h3>${grids}</section>` : ''}
+      <section class="sec"><h3>Portal-Kalender</h3>
+        <p class="d">Der Link wird nur gelesen und dient nur der Kontrolle. Ein gespeicherter Link wird aus Sicherheitsgründen nicht mehr angezeigt.</p>
+        <div class="tbl"><table><thead><tr><th>Portal</th><th>iCal-Export-Link</th><th>Zählt mit</th><th>Status</th><th></th></tr></thead><tbody>${cfgRows || '<tr><td colspan="5" class="small">Kein Portal eingetragen.</td></tr>'}</tbody></table></div>
+        <div class="row"><input class="in" id="pNew" placeholder="weiteres Portal, Name" style="width:240px"><button class="mini" type="button" id="pAdd">+ Portal</button></div>
+      </section></div></div>`;
+    bindPortals();
+  }
+
+  async function pAct(fn, okMsg) {
+    try { await fn(); if (okMsg) toast(okMsg); } catch (e) { toast(e.message); }
+    const y = window.scrollY; await renderPortals(); window.scrollTo(0, y); checkPortals();
+  }
+
+  function bindPortals() {
+    const put = (p, body) => api(p, { method: 'PUT', body });
+    $('#pMonths').onchange = e => { pst.months = +e.target.value; pAct(async () => {}); };
+    $('#pRefresh').onclick = () => pAct(() => api('/api/admin/refresh', { method: 'POST' }), 'Abgerufen.');
+    $$('[data-pname]').forEach(i => i.onchange = () => pAct(() => put(`/api/admin/portals/${i.dataset.pname}`, { name: i.value }), 'Gespeichert.'));
+    $$('[data-psave]').forEach(b => b.onclick = () => {
+      const inp = $(`[data-purl="${b.dataset.psave}"]`);
+      if (!inp.value.trim()) return toast('Bitte zuerst einen Link einfügen.');
+      pAct(() => put(`/api/admin/portals/${b.dataset.psave}`, { icalUrl: inp.value.trim() }), 'Link gespeichert und abgerufen.');
+    });
+    $$('[data-papt]').forEach(c => c.onchange = () => {
+      const pid = c.dataset.papt.split('|')[0];
+      const apts = $$(`[data-papt^="${pid}|"]`).filter(x => x.checked).map(x => +x.dataset.papt.split('|')[1]);
+      pAct(() => put(`/api/admin/portals/${pid}`, { apts }), 'Gespeichert.');
+    });
+    $$('[data-pdel]').forEach(b => b.onclick = () => {
+      if (b.dataset.armed !== '1') { b.dataset.armed = '1'; b.textContent = 'Wirklich entfernen?'; b.classList.add('danger'); return; }
+      pAct(() => api(`/api/admin/portals/${b.dataset.pdel}`, { method: 'DELETE' }), 'Entfernt.');
+    });
+    $('#pAdd').onclick = () => { const n = $('#pNew').value.trim(); if (!n) return toast('Bitte einen Namen angeben.'); pAct(() => api('/api/admin/portals', { method: 'POST', body: { name: n } }), 'Portal hinzugefügt.'); };
+  }
+
   /* ---------- Ereignisse ---------- */
 
   document.addEventListener('click', e => {
@@ -1107,6 +1233,7 @@
   }
   $('#setBtn').onclick = () => { state.view = state.view === 'settings' ? 'w4' : 'settings'; render(); window.scrollTo(0, 0); };
   if ($('#invBtn')) $('#invBtn').onclick = () => { if (state.view === 'invoices') state.view = 'w4'; else { state.view = 'invoices'; ivs.page = 'list'; } render(); window.scrollTo(0, 0); };
+  if ($('#portBtn')) $('#portBtn').onclick = () => { state.view = state.view === 'portals' ? 'w4' : 'portals'; render(); window.scrollTo(0, 0); };
   if ($('#guestBtn')) $('#guestBtn').onclick = () => { if (state.view === 'guests') state.view = 'w4'; else { state.view = 'guests'; gst.id = null; } render(); window.scrollTo(0, 0); };
 
   load();

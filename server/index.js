@@ -19,6 +19,7 @@ import { smoobuConfigured, smoobuAuthMode, listApartments as smoobuApartments, f
 import * as G from './guests.js';
 import * as INV from './invoices.js';
 import { loadImage } from './image.js';
+import { comparePortal, cleanPortal } from './portals.js';
 import { contractPdf, cleanContract, ensureContract, DEFAULT_CONTRACT, DEFAULT_TERMS_INVOICE, DEFAULT_TERMS_CONTRACT, PLACEHOLDERS, appendTerms, termsSnapshot } from './contract.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -37,17 +38,34 @@ const COLORS = ['p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7', 'p8'];
 
 /* ---------- iCal-Abruf ---------- */
 
+async function fetchIcs(url) {
+  const res = await fetch(url, { signal: AbortSignal.timeout(20000), headers: { 'User-Agent': 'Fewo-Kalender/1.0' } });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const text = await res.text();
+  if (!text.includes('BEGIN:VCALENDAR')) throw new Error('Antwort ist kein iCal-Kalender');
+  return parseICS(text).map(e => ({ uid: e.uid || '', start: e.start, end: e.end, summary: e.summary || '', description: e.description || '' }));
+}
+
+// Portal-Kalender (nur zur Kontrolle, fließen nicht in den Kalender ein)
+async function fetchPortal(pt) {
+  if (!pt.icalUrl) return;
+  const cache = (store.data.portalCache ||= {});
+  const prev = cache[pt.id] || {};
+  try {
+    cache[pt.id] = { fetchedAt: new Date().toISOString(), error: null, events: await fetchIcs(pt.icalUrl) };
+  } catch (e) {
+    cache[pt.id] = { ...prev, error: e.message, failedAt: new Date().toISOString(), events: prev.events || [] };
+    console.error(`Abruf Portal ${pt.name} fehlgeschlagen:`, e.message);
+  }
+}
+
 // Quelle "ical": Ergebnis direkt in den Cache. Quelle "smoobu": iCal-Link als Ersatz (backup) mit abrufen.
 async function fetchApartment(apt) {
   if (!['ical', 'smoobu'].includes(apt.source) || !apt.icalUrl) return;
   const target = apt.source === 'ical' ? store.data.cache : (store.data.backup ||= {});
   const prev = target[apt.id] || {};
   try {
-    const res = await fetch(apt.icalUrl, { signal: AbortSignal.timeout(20000), headers: { 'User-Agent': 'Fewo-Kalender/1.0' } });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const text = await res.text();
-    if (!text.includes('BEGIN:VCALENDAR')) throw new Error('Antwort ist kein iCal-Kalender');
-    const events = parseICS(text).map(e => ({ uid: e.uid || '', start: e.start, end: e.end, summary: e.summary || '', description: e.description || '' }));
+    const events = await fetchIcs(apt.icalUrl);
     target[apt.id] = { fetchedAt: new Date().toISOString(), error: null, events };
   } catch (e) {
     // letzten Stand behalten, Fehler merken
@@ -116,7 +134,7 @@ let refreshing = null;
 async function refreshAll() {
   if (refreshing) return refreshing;
   refreshing = (async () => {
-    await Promise.all([...store.data.apartments.map(fetchApartment), fetchSmoobu()]);
+    await Promise.all([...store.data.apartments.map(fetchApartment), fetchSmoobu(), ...(store.data.portals || []).map(fetchPortal)]);
     applyFallback();
     store.save();
   })().finally(() => { refreshing = null; });
@@ -326,6 +344,55 @@ async function handleAdmin(req, res, p, url) {
     }
     store.save();
     if (b.icalUrl !== undefined || b.source !== undefined || b.smoobuId !== undefined) { await Promise.all([fetchApartment(apt), fetchSmoobu()]); applyFallback(); store.save(); }
+    return send(res, 200, { ok: true });
+  }
+
+  // Portal-Abgleich
+  if (p === '/api/admin/portals' && m === 'GET') {
+    const months = Math.min(18, Math.max(1, +url.searchParams.get('months') || 6));
+    const now = new Date();
+    const from = now.toLocaleDateString('sv-SE', { timeZone: 'Europe/Berlin' });
+    const to = new Date(Date.UTC(+from.slice(0, 4), +from.slice(5, 7) - 1 + months, 1)).toISOString().slice(0, 10);
+    const aptEvents = Object.fromEntries(d.apartments.map(a => [a.id, a.source === 'own'
+      ? d.firm.map(e => ({ start: e.from, end: e.to }))
+      : (d.cache[a.id]?.events || []).map(e => ({ start: e.start, end: e.end }))]));
+    const portals = (d.portals || []).map(pt => {
+      const c = d.portalCache?.[pt.id] || {};
+      const aptIds = pt.apts.filter(id => d.apartments.some(a => a.id === id));
+      const cmp = pt.icalUrl && c.fetchedAt ? comparePortal({ aptIds, aptEvents, portalEvents: c.events || [], from, to }) : null;
+      return { id: pt.id, name: pt.name, apts: aptIds, hasUrl: !!pt.icalUrl, urlHost: pt.icalUrl ? safeHost(pt.icalUrl) : '',
+        fetchedAt: c.fetchedAt || null, error: c.error || null, count: c.events?.length || 0,
+        events: (c.events || []).filter(e => e.end > from && e.start < to).map(e => ({ start: e.start, end: e.end, summary: e.summary })),
+        ...(cmp || {}) };
+    });
+    return send(res, 200, { from, to, months, portals,
+      apartments: d.apartments.map(a => ({ id: a.id, name: a.name, nick: a.nick, color: a.color, source: a.source })) });
+  }
+  if (p === '/api/admin/portals' && m === 'POST') {
+    const b = await readJson(req);
+    const c = cleanPortal(b, d.apartments);
+    if (!c.name) throw new Error('Bitte einen Namen angeben.');
+    const id = (d.portals || []).reduce((mx, x) => Math.max(mx, x.id), 0) + 1;
+    (d.portals ||= []).push({ id, name: c.name, icalUrl: '', apts: c.apts || d.apartments.filter(a => a.source !== 'own').map(a => a.id) });
+    store.save();
+    return send(res, 200, { ok: true, id });
+  }
+  const ptm = p.match(/^\/api\/admin\/portals\/(\d+)$/);
+  if (ptm && (m === 'PUT' || m === 'DELETE')) {
+    const pt = (d.portals || []).find(x => x.id === +ptm[1]);
+    if (!pt) throw new Error('Portal unbekannt');
+    if (m === 'DELETE') { d.portals = d.portals.filter(x => x !== pt); if (d.portalCache) delete d.portalCache[pt.id]; store.save(); return send(res, 200, { ok: true }); }
+    const b = await readJson(req);
+    const c = cleanPortal(b, d.apartments);
+    if (b.name !== undefined) { if (!c.name) throw new Error('Bitte einen Namen angeben.'); pt.name = c.name; }
+    if (c.apts) pt.apts = c.apts;
+    if (b.icalUrl !== undefined) {
+      const u = String(b.icalUrl).trim();
+      if (u && !/^https?:\/\//i.test(u)) throw new Error('Der Link muss mit https:// beginnen.');
+      pt.icalUrl = u; if (d.portalCache) delete d.portalCache[pt.id];
+    }
+    store.save();
+    if (b.icalUrl !== undefined) { await fetchPortal(pt); store.save(); }
     return send(res, 200, { ok: true });
   }
 
