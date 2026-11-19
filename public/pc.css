@@ -63,6 +63,11 @@ body.pc :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; 
 .pc-nav a:hover { background: rgba(255,255,255,.06); color: #fff; }
 .pc-nav a.active { background: var(--side-active); color: #fff; box-shadow: inset 3px 0 0 #818cf8; }
 .pc-nav a .nb { margin-left: auto; background: rgba(251,191,36,.18); color: #fcd34d; font-size: 11px; font-weight: 600; padding: 1px 8px; border-radius: 99px; }
+.pc-print { padding: 0 4px; }
+body.pc .pc-print .pdfbox { display: flex; flex-direction: column; align-items: stretch; gap: 6px; margin: 0; }
+body.pc .pc-print .pdfbox input { height: 34px; width: 100%; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.12); color: #fff; color-scheme: dark; box-shadow: none; border-radius: 10px; padding: 0 10px; font: inherit; }
+body.pc .pc-print .chip { width: 100%; justify-content: flex-start; height: 36px; padding: 0 12px; gap: 12px; background: transparent; border: 0; box-shadow: none; color: inherit; font-weight: 500; }
+body.pc .pc-print .chip:hover { background: rgba(255,255,255,.06); color: #fff; }
 .pc-foot { margin-top: auto; padding: 16px 8px 0; }
 .pc-theme { width: 100%; display: flex; align-items: center; gap: 10px; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.08); color: inherit; padding: 9px 12px; border-radius: 10px; }
 .pc-theme:hover { background: rgba(255,255,255,.1); color: #fff; }
@@ -141,14 +146,16 @@ body.pc .swatches .sw[aria-pressed="true"] { border-color: var(--fg); box-shadow
 body.pc .mono { font-family: "Cascadia Mono", Consolas, ui-monospace, monospace; font-size: 12.5px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; }
 
 /* ---------- Kennzahlen ---------- */
-.pc-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px; }
-.pc-kpi { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow); padding: 18px 20px; color: inherit; text-decoration: none; display: block; min-width: 0; }
+.pc-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.pc-kpi { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow-sm); padding: 9px 14px; color: inherit; text-decoration: none; display: block; min-width: 0; }
 button.pc-kpi { text-align: left; font: inherit; cursor: pointer; }
 button.pc-kpi:hover { border-color: var(--border-strong); }
-.pc-kpi .t { display: flex; align-items: center; gap: 10px; color: var(--muted); font-weight: 500; font-size: 13px; }
-.pc-kpi .ic { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; flex: none; }
-.pc-kpi .v { font-size: 26px; font-weight: 700; letter-spacing: -.02em; margin-top: 12px; font-variant-numeric: tabular-nums; }
-.pc-kpi .f { color: var(--muted); font-size: 12.5px; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pc-kpi .t { display: flex; align-items: center; gap: 8px; color: var(--muted); font-weight: 500; font-size: 12.5px; }
+.pc-kpi .t .v { margin: 0 0 0 auto; }
+.pc-kpi .ic svg.i { width: 15px; height: 15px; }
+.pc-kpi .ic { width: 26px; height: 26px; border-radius: 8px; display: grid; place-items: center; flex: none; }
+.pc-kpi .v { font-size: 17px; font-weight: 700; letter-spacing: -.01em; margin-top: 0; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.pc-kpi .f { color: var(--muted); font-size: 12px; margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tone-p { background: var(--primary-soft); color: var(--accent); }
 .tone-ok { background: var(--ok-soft); color: var(--ok); }
 .tone-n { background: var(--soft); color: var(--muted); }

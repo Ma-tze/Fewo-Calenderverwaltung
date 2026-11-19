@@ -1319,7 +1319,6 @@
     $('#pcSub').textContent = P.sub;
     $('#pcSub').hidden = k === 'kalender';
     $('#standLine').hidden = k !== 'kalender';
-    $('.pdfbox').hidden = k !== 'kalender';
     pcKpis(k === 'kalender');
     pcBadges();
   }
@@ -1333,7 +1332,7 @@
     const arr = real.filter(e => e.arr >= TODAY && e.arr < wkEnd).sort((a, b) => a.arr - b.arr);
     const dep = real.filter(e => e.dep >= TODAY && e.dep < wkEnd).sort((a, b) => a.dep - b.dep);
     const who = (l, k) => l.map(e => `${e.title || 'Belegt'}, ${WD[e[k].getDay()]} ${f(e[k])}`).join(' · ') || 'keine';
-    const card = (ic, tone, t, v, foot, go) => `<${go ? `button type="button" data-pcgo="${go}"` : 'div'} class="pc-kpi"><div class="t"><span class="ic ${tone}">${pcIcon(ic)}</span>${t}</div><div class="v">${esc(v)}</div><div class="f" title="${esc(foot)}">${esc(foot)}</div></${go ? 'button' : 'div'}>`;
+    const card = (ic, tone, t, v, foot, go) => `<${go ? `button type="button" data-pcgo="${go}"` : 'div'} class="pc-kpi"><div class="t"><span class="ic ${tone}">${pcIcon(ic)}</span>${t}<span class="v">${esc(v)}</span></div><div class="f" title="${esc(foot)}">${esc(foot)}</div></${go ? 'button' : 'div'}>`;
     box.innerHTML = card('bed', 'tone-p', 'Heute belegt', `${busy.length} von ${data.apartments.length}`, busy.map(a => a.name).join(', ') || 'alles frei')
       + card('arrowin', 'tone-ok', 'Anreisen diese Woche', String(arr.length), who(arr, 'arr'))
       + card('arrowout', 'tone-n', 'Abreisen diese Woche', String(dep.length), who(dep, 'dep'))
@@ -1364,6 +1363,7 @@
           <div class="lab">Belegung</div>${a('kalender')}${a('gaeste')}${a('rechnungen')}
           <div class="lab">Abgleich</div>${a('portale')}${a('firma')}
           <div class="lab">Auswertung</div>${a('ust')}
+          <div class="lab">Ausdrucken</div><div class="pc-print" id="pcPrint"></div>
           <div class="lab">Einstellungen</div>${a('wohnungen')}${a('saisons')}${a('preise')}${a('vertrag')}
         </nav>
         <div class="pc-foot"><button class="pc-theme" type="button"></button></div>
@@ -1378,7 +1378,9 @@
     $('.pc-menu').onclick = () => $('.pc-side').classList.toggle('open');
     $('#standLine').insertAdjacentHTML('afterend', '<div class="sub" id="pcSub" hidden></div>');
     $('#title').parentElement.style.flex = '1';
-    $('#pdfBtn').innerHTML = `${pcIcon('printer')}Monat als PDF`;
+    // Monatsübersicht drucken: Monatsfeld und Knopf in die Seitenleiste
+    $('#pdfBtn').innerHTML = `${pcIcon('printer')}<span>Monat drucken (PDF)</span>`;
+    $('#pcPrint').appendChild($('.pdfbox'));
     // Kalender-Umschalter und Blättern in die Werkzeugleiste über der Tabelle
     const tb = $('#toolbar');
     tb.prepend($('#dock'));
