@@ -79,7 +79,7 @@
     const missing = data.apartments.filter(a => !a.configured);
     const errors = data.apartments.filter(a => a.error);
     let msg = '';
-    if (missing.length) msg = `Für ${missing.map(a => a.name).join(', ')} ist noch kein Kalender hinterlegt. ${MODE === 'admin' ? 'Bitte unter ⚙ Einstellungen eintragen.' : 'Das wird am PC eingerichtet.'}`;
+    if (missing.length) msg = `Für ${missing.map(a => a.name).join(', ')} ist noch kein Kalender hinterlegt. ${MODE === 'admin' ? 'Bitte unter „Wohnungen & Abruf“ eintragen.' : 'Das wird am PC eingerichtet.'}`;
     else if (errors.length && MODE === 'admin') msg = `Abruf fehlgeschlagen: ${errors.map(a => `${a.name} (${a.error})`).join(', ')}. Angezeigt wird der letzte Stand.`;
     banner.hidden = !msg; banner.textContent = msg;
 
@@ -746,7 +746,7 @@
         : L.testCount ? `<div class="notice">Aus dem Testbetrieb sind noch ${L.testCount} Testrechnung${L.testCount > 1 ? 'en' : ''} vorhanden. Sie zählen nicht im USt-Bericht. <button class="mini" type="button" id="ivTestDel">Testrechnungen löschen</button></div>` : ''}
       ${L.sellerReady ? '' : '<div class="notice warn">Bitte zuerst unter „Vermieterdaten und Preise“ Name, Anschrift und Steuernummer eintragen.</div>'}
       <section class="sec"><h3>Rechnungen</h3>
-        <p class="d">Eine neue Rechnung legst du beim Gast an: 👥 Gäste → Gast öffnen → beim Aufenthalt „Rechnung“. Festgeschriebene Rechnungen sind nicht mehr änderbar, Korrekturen laufen über „Rechnung korrigieren“.</p>
+        <p class="d">Eine neue Rechnung legst du beim Gast an: Gäste → Gast öffnen → beim Aufenthalt „Rechnung“. Festgeschriebene Rechnungen sind nicht mehr änderbar, Korrekturen laufen über „Rechnung korrigieren“.</p>
         <div class="row"><button class="mini" type="button" id="ivSet">Vermieterdaten und Preise</button><button class="mini" type="button" id="ivToGuests">Zu den Gästen</button></div>
         <div class="tbl"><table><thead><tr><th>Nummer</th><th>Datum</th><th>Gast</th><th>Zeitraum</th><th style="text-align:right">Betrag</th><th>Status</th></tr></thead>
         <tbody>${rows || '<tr><td colspan="6" class="small">Noch keine Rechnungen.</td></tr>'}</tbody></table></div>
@@ -820,7 +820,7 @@
         <div class="row"><label>Bezeichnung auf der Rechnung <input class="in" id="ktLabel" value="${esc(S.kurtaxe.label)}" style="width:200px"></label>
           <label>Hauptsaison vom <input class="in short" data-ktm="mainFrom" value="${mdDe(S.kurtaxe.mainFrom)}" placeholder="TT.MM." style="width:80px"></label>
           <label>bis <input class="in short" data-ktm="mainTo" value="${mdDe(S.kurtaxe.mainTo)}" placeholder="TT.MM." style="width:80px"></label>
-          <span class="small">leer = Hauptsaisons aus ⚙ Einstellungen</span></div>
+          <span class="small">leer = Hauptsaisons aus „Saisons & Ferien“</span></div>
         <div class="tbl"><table><thead><tr><th>Gruppe</th><th>Alter</th><th>€ Hauptsaison</th><th>€ übrige Zeit</th><th></th></tr></thead><tbody>${kt}</tbody></table></div>
         <div class="row"><button class="mini" type="button" id="ktAdd">+ Altersgruppe</button></div>
       </section>
@@ -1101,6 +1101,7 @@
     h.innerHTML = portalHintText ? `${esc(portalHintText)} <button class="mini" type="button" id="portHintBtn">Ansehen</button>` : '';
     h.hidden = !portalHintText || state.view === 'portals';
     if ($('#portHintBtn')) $('#portHintBtn').onclick = () => { state.view = 'portals'; render(); window.scrollTo(0, 0); };
+    if (MODE === 'admin') pcApply();
   }
 
   const STATE_TXT = {
@@ -1235,6 +1236,223 @@
   if ($('#invBtn')) $('#invBtn').onclick = () => { if (state.view === 'invoices') state.view = 'w4'; else { state.view = 'invoices'; ivs.page = 'list'; } render(); window.scrollTo(0, 0); };
   if ($('#portBtn')) $('#portBtn').onclick = () => { state.view = state.view === 'portals' ? 'w4' : 'portals'; render(); window.scrollTo(0, 0); };
   if ($('#guestBtn')) $('#guestBtn').onclick = () => { if (state.view === 'guests') state.view = 'w4'; else { state.view = 'guests'; gst.id = null; } render(); window.scrollTo(0, 0); };
+
+  /* ---------- PC-Ansicht: Seitenleiste, Kopfzeile, Kennzahlen (nur body.pc) ---------- */
+
+  const PCI = {
+    calendar: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
+    users: '<circle cx="9" cy="8" r="4"/><path d="M2 21a7 7 0 0 1 14 0"/><path d="M16 4a4 4 0 0 1 0 8M22 21a7 7 0 0 0-4-6.3"/>',
+    receipt: '<path d="M5 3h14v18l-3-2-2 2-2-2-2 2-2-2-3 2z"/><path d="M9 8h6M9 12h6M9 16h3"/>',
+    compare: '<path d="M8 3 4 7l4 4M4 7h16M16 21l4-4-4-4M20 17H4"/>',
+    building: '<rect x="4" y="3" width="16" height="18" rx="1.5"/><path d="M9 7h1M14 7h1M9 11h1M14 11h1M9 15h1M14 15h1M10 21v-3h4v3"/>',
+    chart: '<path d="M3 3v18h18"/><path d="M7 15v2M12 10v7M17 6v11"/>',
+    home: '<path d="M3 11 12 3l9 8"/><path d="M5 10v10h14V10"/><path d="M10 20v-6h4v6"/>',
+    sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
+    moon: '<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>',
+    euro: '<path d="M18 7a7 7 0 1 0 0 10M4 10h10M4 14h10"/>',
+    pen: '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>',
+    bed: '<path d="M3 18V6M3 13h18v5M21 13a3 3 0 0 0-3-3h-7v3"/><circle cx="7" cy="10" r="2"/>',
+    arrowin: '<path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><path d="m10 17 5-5-5-5M15 12H3"/>',
+    arrowout: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5M21 12H9"/>',
+    menu: '<path d="M3 6h18M3 12h18M3 18h18"/>',
+    printer: '<path d="M6 9V3h12v6"/><rect x="3" y="9" width="18" height="8" rx="2"/><path d="M6 14h12v7H6z"/>',
+  };
+  const pcIcon = n => `<svg class="i" viewBox="0 0 24 24" aria-hidden="true">${PCI[n] || ''}</svg>`;
+  const PC = {
+    kalender: { t: 'Belegung', sub: '', icon: 'calendar', nav: 'Kalender' },
+    gaeste: { t: 'Gäste', sub: 'Gästedatenbank mit Stammgästen und Aufenthalten', icon: 'users' },
+    rechnungen: { t: 'Rechnungen', sub: 'Entwürfe, festgeschriebene Rechnungen und Zahlungseingänge', icon: 'receipt' },
+    portale: { t: 'Portal-Abgleich', sub: 'Bodensee-Portale gegen die Smoobu-Belegung', icon: 'compare' },
+    firma: { t: 'Belegungsplan Firma', sub: 'Eigener Kalender, nicht in Smoobu', icon: 'building', nav: 'Fewo 1 · Firma' },
+    ust: { t: 'Umsatzsteuer', sub: 'Bericht für die Voranmeldung', icon: 'chart' },
+    wohnungen: { t: 'Wohnungen & Abruf', sub: 'Name, Farbe, Reihenfolge und Datenquelle jeder Wohnung', icon: 'home' },
+    saisons: { t: 'Saisons & Ferien', sub: 'Haupt- und Nebensaison je Jahr, Ferien Baden-Württemberg', icon: 'sun' },
+    preise: { t: 'Rechnung & Preise', sub: 'Vermieterin, Logo, Nummern, Zahlungsbedingungen, Preisbausteine, Kurtaxe', icon: 'euro' },
+    vertrag: { t: 'Mietbedingungen & Vertrag', sub: 'Vorlagen mit Platzhaltern, werden aus der Rechnung gefüllt', icon: 'pen' },
+  };
+  const pc = { sub: null };
+  function pcKey() {
+    const v = state.view;
+    if (v === 'guests') return 'gaeste';
+    if (v === 'portals') return 'portale';
+    if (v === 'settings') return ['firma', 'saisons'].includes(pc.sub) ? pc.sub : 'wohnungen';
+    if (v === 'invoices') {
+      if (ivs.page === 'settings') return pc.sub === 'vertrag' ? 'vertrag' : 'preise';
+      if (ivs.page === 'list' && pc.sub === 'ust') return 'ust';
+      return 'rechnungen';
+    }
+    return 'kalender';
+  }
+  function pcGo(k) {
+    pc.sub = k;
+    if (k === 'kalender') { if (!['w4', 'm3', 'year', 'today'].includes(state.view)) state.view = 'w4'; }
+    else if (k === 'gaeste') { state.view = 'guests'; gst.id = null; }
+    else if (k === 'portale') state.view = 'portals';
+    else if (['wohnungen', 'firma', 'saisons'].includes(k)) state.view = 'settings';
+    else { state.view = 'invoices'; ivs.page = k === 'preise' || k === 'vertrag' ? 'settings' : 'list'; }
+    $('.pc-side').classList.remove('open');
+    closeOverlay();
+    render();
+    window.scrollTo(0, 0);
+  }
+  const PC_SHOW = {
+    wohnungen: s => s.id === 's-quellen',
+    firma: s => s.id === 's-firm',
+    saisons: s => s.id === 's-saison' || s.id === 's-ferien',
+    rechnungen: s => !/^Umsatzsteuer-Bericht/.test(s.h),
+    ust: s => /^Umsatzsteuer-Bericht/.test(s.h),
+    preise: s => !/^Mietbedingungen und Mietvertrag/.test(s.h),
+    vertrag: s => /^Mietbedingungen und Mietvertrag/.test(s.h),
+  };
+  function pcApply() {
+    const k = pcKey();
+    if (['wohnungen', 'firma', 'saisons', 'preise', 'vertrag', 'rechnungen', 'ust'].includes(k)) pc.sub = k;
+    const show = PC_SHOW[k];
+    $$('#view .sbody > .sec').forEach(s => { s.hidden = show ? !show({ id: s.id, h: (s.querySelector('h3')?.textContent || '').trim() }) : false; });
+    // Zurück-Knöpfe, die nur innerhalb eines Menüpunkts wechseln, bleiben; „Zu den Gästen“ und „Vermieterdaten“ übernimmt die Seitenleiste
+    ['#ivToGuests'].forEach(s => { const b = $(s); if (b) b.hidden = true; });
+    if ($('#ivSet')) $('#ivSet').hidden = true;
+    if (k === 'preise' || k === 'vertrag') { const b = $('#ivBack'); if (b) b.closest('.row').hidden = true; }
+    $$('.pc-nav a').forEach(a => a.classList.toggle('active', a.dataset.k === k));
+    const P = PC[k];
+    $('#title').textContent = k === 'kalender' ? 'Belegung Ferienwohnungen' : P.t;
+    $('#pcSub').textContent = P.sub;
+    $('#pcSub').hidden = k === 'kalender';
+    $('#standLine').hidden = k !== 'kalender';
+    pcKpis(k === 'kalender');
+    pcBadges();
+  }
+  function pcKpis(on) {
+    const box = $('#pcKpi');
+    box.hidden = !on || !data.apartments.length;
+    if (box.hidden) return;
+    const real = data.events.filter(e => e.source !== 'Belegungsplan');
+    const busy = data.apartments.filter(a => data.events.some(e => e.apt === a.id && e.arr <= TODAY && e.dep > TODAY));
+    const wkEnd = add(startOfWeek(TODAY), 7);
+    const arr = real.filter(e => e.arr >= TODAY && e.arr < wkEnd).sort((a, b) => a.arr - b.arr);
+    const dep = real.filter(e => e.dep >= TODAY && e.dep < wkEnd).sort((a, b) => a.dep - b.dep);
+    const who = (l, k) => l.map(e => `${e.title || 'Belegt'}, ${WD[e[k].getDay()]} ${f(e[k])}`).join(' · ') || 'keine';
+    const card = (ic, tone, t, v, foot, go) => `<${go ? `button type="button" data-pcgo="${go}"` : 'div'} class="pc-kpi"><div class="t"><span class="ic ${tone}">${pcIcon(ic)}</span>${t}<span class="v">${esc(v)}</span></div><div class="f" title="${esc(foot)}">${esc(foot)}</div></${go ? 'button' : 'div'}>`;
+    box.innerHTML = card('bed', 'tone-p', 'Heute belegt', `${busy.length} von ${data.apartments.length}`, busy.map(a => a.name).join(', ') || 'alles frei')
+      + card('arrowin', 'tone-ok', 'Anreisen diese Woche', String(arr.length), who(arr, 'arr'))
+      + card('arrowout', 'tone-n', 'Abreisen diese Woche', String(dep.length), who(dep, 'dep'))
+      + card('compare', portalHintText ? 'tone-e' : 'tone-ok', 'Portal-Abgleich', portalHintText ? 'weicht ab' : 'stimmt', portalHintText.replace(/^Portal-Abgleich: /, '') || 'Bodensee-Portale passen zur Belegung', 'portale');
+    $$('#pcKpi [data-pcgo]').forEach(b => b.onclick = () => pcGo(b.dataset.pcgo));
+  }
+  // Dialog „Belegung drucken“: ein Monat, ein ganzes Jahr (12 Seiten) oder ein Zeitraum
+  const MON = ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez'];
+  const MONL = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
+  const pr = { mode: 'monat', year: null, a: null, b: null, kontakt: true, pick: false };
+  function pcPrintDialog() {
+    const ym = (y, m) => `${y}-${String(m + 1).padStart(2, '0')}`;
+    const lbl = v => `${MONL[+v.slice(5) - 1]} ${v.slice(0, 4)}`;
+    if (!pr.year) { pr.year = TODAY.getFullYear(); pr.a = pr.b = ym(pr.year, TODAY.getMonth()); }
+    const range = () => {
+      if (pr.mode === 'jahr') return [ym(pr.year, 0), ym(pr.year, 11)];
+      if (pr.mode === 'monat') return [pr.a, pr.a];
+      return pr.a <= pr.b ? [pr.a, pr.b] : [pr.b, pr.a];
+    };
+    const draw = () => {
+      const [from, to] = range();
+      const n = (+to.slice(0, 4) - +from.slice(0, 4)) * 12 + (+to.slice(5) - +from.slice(5)) + 1;
+      const cur = ym(TODAY.getFullYear(), TODAY.getMonth());
+      $('#prBody').innerHTML = `
+        <div class="pc-seg" role="tablist">${[['monat', 'Ein Monat'], ['jahr', 'Ganzes Jahr'], ['zeitraum', 'Zeitraum']].map(([k, t]) => `<button type="button" role="tab" data-prmode="${k}" aria-selected="${pr.mode === k}">${t}</button>`).join('')}</div>
+        <div class="pc-yr"><button class="mini" type="button" data-pryear="-1" aria-label="Jahr zurück">‹</button><b>${pr.year}</b><button class="mini" type="button" data-pryear="1" aria-label="Jahr vor">›</button></div>
+        <div class="pc-months${pr.mode === 'jahr' ? ' all' : ''}">${MON.map((t, m) => { const v = ym(pr.year, m); const on = v >= from && v <= to; const edge = pr.mode !== 'jahr' && (v === from || v === to); return `<button type="button" data-prm="${v}" class="${on ? 'on' : ''}${edge ? ' edge' : ''}${v === cur ? ' now' : ''}">${t}</button>`; }).join('')}</div>
+        <p class="pc-prhint">${pr.mode === 'zeitraum' ? (pr.pick ? 'Jetzt den letzten Monat anklicken.' : 'Ersten und letzten Monat anklicken. Mit ‹ › geht es auch über den Jahreswechsel.') : pr.mode === 'jahr' ? 'Jeder Monat kommt auf eine eigene Seite.' : 'Monat anklicken.'}</p>
+        <label class="pc-check"><input type="checkbox" id="prKontakt"${pr.kontakt ? ' checked' : ''}> Mit Telefon und E-Mail der Gäste<small>Ohne Haken als Aushang, z. B. für die Putzhilfe.</small></label>
+        <div class="pc-prsum"><b>${n === 1 ? lbl(from) : pr.mode === 'jahr' ? `Jahr ${pr.year}` : `${lbl(from)} bis ${lbl(to)}`}</b><span>${n} ${n === 1 ? 'Monat' : 'Monate'}, je Monat eine Seite im Querformat</span></div>`;
+      $$('[data-prmode]').forEach(b => b.onclick = () => {
+        pr.mode = b.dataset.prmode; pr.pick = false;
+        if (pr.mode !== 'zeitraum') pr.b = pr.a;
+        if (pr.mode === 'monat' && pr.a.slice(0, 4) !== String(pr.year)) pr.a = pr.b = ym(pr.year, 0);
+        draw();
+      });
+      $$('[data-pryear]').forEach(b => b.onclick = () => { pr.year += +b.dataset.pryear; draw(); });
+      $$('[data-prm]').forEach(b => b.onclick = () => {
+        const v = b.dataset.prm;
+        if (pr.mode === 'jahr') return;
+        if (pr.mode === 'monat') pr.a = pr.b = v;
+        else if (pr.pick) { pr.b = v; pr.pick = false; } else { pr.a = pr.b = v; pr.pick = true; }
+        draw();
+      });
+      $('#prKontakt').onchange = e => { pr.kontakt = e.target.checked; };
+      $('#prGo').disabled = n > 24;
+      $('#prGo').title = n > 24 ? 'Höchstens 24 Monate auf einmal' : '';
+    };
+    overlay(`<h2>Belegung drucken</h2><div id="prBody" class="pc-pr"></div>
+      <div class="row end"><button class="btn" type="button" id="prCancel">Abbrechen</button><button class="btn primary" type="button" id="prGo">${pcIcon('printer')}PDF öffnen</button></div>`);
+    pr.pick = false;
+    draw();
+    $('#prCancel').onclick = closeOverlay;
+    $('#prGo').onclick = () => {
+      const [from, to] = range();
+      window.open(`/export/monat.pdf?m=${from}${to !== from ? `&bis=${to}` : ''}${pr.kontakt ? '' : '&kontakt=0'}`, '_blank');
+      closeOverlay();
+    };
+  }
+  function pcBadges() {
+    const b = $('.pc-nav a[data-k="portale"] .nb');
+    if (b) { b.hidden = !portalHintText; b.textContent = '!'; }
+  }
+  function pcTheme(t) {
+    if (t) document.documentElement.dataset.theme = t; else delete document.documentElement.dataset.theme;
+    try { t ? localStorage.setItem('fewo.theme', t) : localStorage.removeItem('fewo.theme'); } catch { /* egal */ }
+    const dark = t === 'dark' || (!t && matchMedia('(prefers-color-scheme: dark)').matches);
+    $('.pc-theme').innerHTML = `${pcIcon(dark ? 'sun' : 'moon')}<span>${dark ? 'Helles Design' : 'Dunkles Design'}</span>`;
+  }
+  function initPc() {
+    const font = document.createElement('link');
+    font.rel = 'stylesheet'; font.href = 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap';
+    document.head.appendChild(font);
+    const shell = document.createElement('div');
+    shell.className = 'pc-shell';
+    const a = k => `<a data-k="${k}">${pcIcon(PC[k].icon)}<span>${PC[k].nav || PC[k].t}</span>${k === 'portale' ? '<span class="nb" hidden></span>' : ''}</a>`;
+    shell.innerHTML = `<aside class="pc-side">
+        <div class="pc-brand"><svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="9" fill="url(#pclg)"/><rect x="8" y="10" width="16" height="13" rx="2" fill="none" stroke="#fff" stroke-width="2.3"/><path d="M8 14.5h16M12.5 8v4M19.5 8v4" stroke="#fff" stroke-width="2.3" stroke-linecap="round"/><defs><linearGradient id="pclg" x1="0" y1="0" x2="32" y2="32"><stop stop-color="#818cf8"/><stop offset="1" stop-color="#4f46e5"/></linearGradient></defs></svg>
+          <div><b>Fewo-Kalender</b><span>Verwaltung am PC</span></div></div>
+        <nav class="pc-nav" aria-label="Menü">
+          <div class="lab">Belegung</div>${a('kalender')}${a('gaeste')}${a('rechnungen')}
+          <div class="lab">Abgleich</div>${a('portale')}${a('firma')}
+          <div class="lab">Auswertung</div>${a('ust')}
+          <div class="lab">Ausdrucken</div><a data-print>${pcIcon('printer')}<span>Belegung drucken</span></a>
+          <div class="lab">Einstellungen</div>${a('wohnungen')}${a('saisons')}${a('preise')}${a('vertrag')}
+        </nav>
+        <div class="pc-foot"><button class="pc-theme" type="button"></button></div>
+      </aside><div class="pc-main"></div>`;
+    const app = $('.app');
+    app.parentNode.insertBefore(shell, app);
+    $('.pc-main').appendChild(app);
+    $$('.pc-nav a').forEach(x => { x.href = '#'; x.onclick = e => { e.preventDefault(); if (x.dataset.k) pcGo(x.dataset.k); else { $('.pc-side').classList.remove('open'); pcPrintDialog(); } }; });
+    // Kopfzeile: Menü-Knopf für schmale Fenster, Untertitel, PDF-Knopf mit Symbol
+    const top = $('header.top');
+    top.insertAdjacentHTML('afterbegin', `<button class="pc-menu" type="button" aria-label="Menü">${pcIcon('menu')}</button>`);
+    $('.pc-menu').onclick = () => $('.pc-side').classList.toggle('open');
+    $('#standLine').insertAdjacentHTML('afterend', '<div class="sub" id="pcSub" hidden></div>');
+    $('#title').parentElement.style.flex = '1';
+    $('.pdfbox').hidden = true; // Drucken läuft über den Dialog „Belegung drucken“ in der Seitenleiste
+    // Kalender-Umschalter und Blättern in die Werkzeugleiste über der Tabelle
+    const tb = $('#toolbar');
+    tb.prepend($('#dock'));
+    tb.insertBefore($('#arrows'), $('#summary'));
+    $('#prevBtn').textContent = '‹ früher'; $('#nextBtn').textContent = 'später ›';
+    tb.insertAdjacentHTML('beforebegin', '<div class="pc-kpis" id="pcKpi" hidden></div>');
+    // Sprungmarken der alten Einstellungsseite auf die neuen Menüpunkte umlenken
+    document.addEventListener('click', e => {
+      const l = e.target.closest('a[href^="#s-"]');
+      if (!l) return;
+      e.preventDefault();
+      const m = { '#s-firm': 'firma', '#s-saison': 'saisons', '#s-ferien': 'saisons' }[l.getAttribute('href')] || 'wohnungen';
+      pcGo(m);
+    });
+    $('.pc-theme').onclick = () => { const d = document.documentElement.dataset.theme === 'dark' || (!document.documentElement.dataset.theme && matchMedia('(prefers-color-scheme: dark)').matches); pcTheme(d ? 'light' : 'dark'); };
+    let saved = null; try { saved = localStorage.getItem('fewo.theme'); } catch { /* egal */ }
+    pcTheme(saved);
+    new MutationObserver(pcApply).observe($('#view'), { childList: true });
+    pcApply();
+  }
+  if (MODE === 'admin') initPc();
 
   load();
   setInterval(load, 5 * 60000);

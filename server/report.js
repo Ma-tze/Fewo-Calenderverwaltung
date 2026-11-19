@@ -14,14 +14,15 @@ const dey = d => `${de(d)}${d.slice(0, 4)}`;
 const nights = (a, b) => Math.round((Date.parse(b) - Date.parse(a)) / 864e5);
 const wday = d => new Date(`${d}T12:00:00Z`).getUTCDay();
 
-export function monthPdf(cal, ym, { contacts = true } = {}) {
+export function monthPdf(cal, ym, { contacts = true, doc: into = null } = {}) {
   const [Y, M] = ym.split('-').map(Number);
   const first = `${ym}-01`;
   const next = M === 12 ? `${Y + 1}-01-01` : `${Y}-${String(M + 1).padStart(2, '0')}-01`;
   const days = nights(first, next);
   const title = `Belegung ${MONTHS[M - 1]} ${Y}`;
 
-  const doc = new PdfDoc();
+  const doc = into ? into.newPage() : new PdfDoc();
+  const startPage = doc.pages.length - 1;
   const L = 28, R = 842 - 28, labelW = 92;
   const dayW = (R - L - labelW) / days;
   const xOf = d => L + labelW + nights(first, d) * dayW;
@@ -140,10 +141,26 @@ export function monthPdf(cal, ym, { contacts = true } = {}) {
   for (let ly = y + noteH; ly <= bottom; ly += noteH) doc.line(L, ly, R, ly);
 
   // Fußzeile
-  doc.pages.forEach((p, i) => {
+  const own = doc.pages.slice(startPage);
+  own.forEach((p, i) => {
     doc.cur = p;
     doc.text(L, 595 - 14, `Fewo-Kalender · ${title}${contacts ? '' : ' · ohne Kontaktdaten'}`, { size: 7, color: MUTED });
-    doc.text(R - 40, 595 - 14, `Seite ${i + 1}/${doc.pages.length}`, { size: 7, color: MUTED });
+    if (own.length > 1) doc.text(R - 40, 595 - 14, `Seite ${i + 1}/${own.length}`, { size: 7, color: MUTED });
   });
+  if (into) return { doc };
   return { buffer: doc.toBuffer(title), filename: `Belegung-${ym}${contacts ? '' : '-Aushang'}.pdf` };
+}
+
+// Mehrere Monate in einem PDF (z. B. ein ganzes Jahr = 12 Monatsseiten), jeder Monat beginnt auf einer neuen Seite.
+export function monthsPdf(cal, from, to, { contacts = true } = {}) {
+  const list = [];
+  for (let [y, m] = from.split('-').map(Number); `${y}-${String(m).padStart(2, '0')}` <= to; m === 12 ? (y++, m = 1) : m++) list.push(`${y}-${String(m).padStart(2, '0')}`);
+  if (list.length === 1) return monthPdf(cal, from, { contacts });
+  const doc = new PdfDoc();
+  doc.pages.length = 0;
+  for (const ym of list) monthPdf(cal, ym, { contacts, doc });
+  const [fy, fm] = from.split('-').map(Number), [ty, tm] = to.split('-').map(Number);
+  const year = fm === 1 && tm === 12 && fy === ty;
+  const title = year ? `Belegung ${fy}` : `Belegung ${MONTHS[fm - 1]} ${fy} bis ${MONTHS[tm - 1]} ${ty}`;
+  return { buffer: doc.toBuffer(title), filename: `Belegung-${year ? fy : `${from}-bis-${to}`}${contacts ? '' : '-Aushang'}.pdf` };
 }
