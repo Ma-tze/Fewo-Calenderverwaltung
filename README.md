@@ -68,6 +68,10 @@ Oben auf **🧾 Rechnungen** klicken.
 
 Wichtig: Der Datenordner (Docker-Volume `fewo-data`) enthält jetzt Rechnungen, die 8 Jahre aufbewahrt werden müssen. Bitte regelmäßig außerhalb des Servers sichern.
 
+### Portal-Abgleich
+
+Am PC unter „🔎 Portal-Abgleich“. ferienwohnungen-bodensee.de und bodenseeurlaub.de führen alle Wohnungen als ein Objekt. Die App liest den iCal-Export jedes Portals (nur lesen) und prüft Nacht für Nacht: Das Portal soll „belegt“ zeigen, wenn alle angehakten Wohnungen laut Smoobu belegt sind, sonst „frei“. Abweichungen erscheinen als Liste und im Monatsraster, im Kalender zusätzlich als Hinweis oben. Den iCal-Export-Link holt man im Vermieter-Bereich des Portals beim Belegungskalender und trägt ihn unten auf der Seite ein.
+
 ### Smoobu-API einrichten
 
 1. In Smoobu unter **Einstellungen → Erweitert → API-Schlüssel** einen Schlüssel mit Secret erzeugen.

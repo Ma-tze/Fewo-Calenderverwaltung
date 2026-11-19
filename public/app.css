@@ -164,3 +164,17 @@ nav.dock button[aria-current="true"] { border-color: var(--accent); box-shadow: 
 .gform label .in { color: var(--fg); font-size: 1.05em; }
 .gform .wide { grid-column: 1 / -1; }
 .mini.danger { border-color: var(--warn); color: var(--warn); }
+
+/* Portal-Abgleich */
+.pgrid table { min-width: 0; width: auto; border-collapse: collapse; table-layout: fixed; }
+.pgrid caption { text-align: left; font-family: var(--font-head); font-weight: 700; padding: 6px 0; }
+.pgrid th { font-size: .7em; text-align: center; padding: 2px 0; width: 24px; min-width: 24px; border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+.pgrid th span { font-weight: 400; }
+.pgrid th.sa { color: var(--fg); }
+.pgrid td { height: 20px; padding: 0; border: 1px solid var(--soft); text-align: center; font-size: .75em; font-weight: 700; }
+.pgrid td.pl { white-space: nowrap; padding: 0 10px 0 0; border: 0; text-align: left; font-weight: 700; font-size: .8em; position: sticky; left: 0; background: var(--surface); }
+.pgrid td.pl i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; }
+.pgrid tr.pp td.pon { background: var(--muted); }
+.pgrid tr.pp td.pl { padding-top: 6px; }
+.pgrid td.portal-zu { background: color-mix(in srgb, var(--warn) 25%, transparent); color: var(--warn); }
+.pgrid td.portal-offen { background: color-mix(in srgb, #e0a100 30%, transparent); color: #8a5a00; }

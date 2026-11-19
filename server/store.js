@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { migrateSeasons } from './holidays.js';
+import { DEFAULT_PORTALS } from './portals.js';
 
 const DEFAULTS = () => ({
   version: 1,
@@ -27,6 +28,8 @@ const DEFAULTS = () => ({
   feedToken: crypto.randomBytes(12).toString('hex'),
   guests: [], // Gästedatenbank: { id, name, email, phone, address, notes, ads, smoobuGuestIds }
   stays: [],  // Aufenthalte: { id, guestId, aptId, start, end, price, adults, children, channel, status, source, smoobuBookingId }
+  portals: DEFAULT_PORTALS(), // Portal-Kalender zum Abgleich: { id, name, icalUrl, apts: [aptId] }
+  portalCache: {}, // portalId -> { fetchedAt, error, events }
   cache: {}, // aptId -> { fetchedAt, error, events: [{uid,start,end,summary,description}] }
 });
 
